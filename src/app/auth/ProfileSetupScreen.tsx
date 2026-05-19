@@ -18,6 +18,11 @@ interface ProfileSetupScreenProps {
     navigation: NativeStackNavigationProp<any, any>;
 }
 
+// Custom Text component to enforce font scaling lock and prevent UI misalignment
+const FixedText = (props: any) => (
+    <Text allowFontScaling={false} maxFontSizeMultiplier={1} {...props} />
+);
+
 export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenProps) {
     // Form State
     const [fullName, setFullName] = useState('');
@@ -61,28 +66,27 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                 animationType="fade"
                 onRequestClose={() => setActiveDropdown(null)}
             >
-                {/* Tapping the dark background closes the modal */}
                 <TouchableOpacity
                     style={styles.modalOverlay}
                     activeOpacity={1}
                     onPress={() => setActiveDropdown(null)}
                 >
                     <View style={styles.modalCard}>
-                        <Text style={styles.modalTitle}>{title}</Text>
+                        <FixedText style={styles.modalTitle}>{title}</FixedText>
                         <ScrollView showsVerticalScrollIndicator={false}>
                             {options.map((opt, index) => (
                                 <TouchableOpacity
                                     key={opt}
                                     style={[
                                         styles.modalOption,
-                                        index === options.length - 1 && { borderBottomWidth: 0 } // remove border from last item
+                                        index === options.length - 1 && { borderBottomWidth: 0 }
                                     ]}
                                     onPress={() => {
                                         onSelect(opt);
                                         setActiveDropdown(null);
                                     }}
                                 >
-                                    <Text style={styles.modalOptionText}>{opt}</Text>
+                                    <FixedText style={styles.modalOptionText}>{opt}</FixedText>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
@@ -103,8 +107,8 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
 
                 {/* Header Section */}
                 <View style={styles.header}>
-                    <Text style={styles.title}>Patient Profile</Text>
-                    <Text style={styles.subtitle}>Complete your profile to continue.</Text>
+                    <FixedText style={styles.title}>Patient Profile</FixedText>
+                    <FixedText style={styles.subtitle}>Complete your profile to continue.</FixedText>
                 </View>
 
                 {/* Profile Picture Upload */}
@@ -115,7 +119,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                             <MaterialIcons name="person" size={14} color="#71787E" />
                         </View>
                     </TouchableOpacity>
-                    <Text style={styles.photoLabel}>PROFILE PHOTO (OPTIONAL)</Text>
+                    <FixedText style={styles.photoLabel}>PROFILE PHOTO (OPTIONAL)</FixedText>
                 </View>
 
                 <View style={styles.divider} />
@@ -125,7 +129,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
 
                     {/* Full Name */}
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Legal Full Name</Text>
+                        <FixedText style={styles.label}>Legal Full Name</FixedText>
                         <View style={styles.inputWrapper}>
                             <MaterialIcons name="badge" size={20} color="#71787E" style={styles.iconLeft} />
                             <TextInput
@@ -134,6 +138,8 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                                 placeholderTextColor="#71787E"
                                 value={fullName}
                                 onChangeText={setFullName}
+                                allowFontScaling={false}
+                                maxFontSizeMultiplier={1}
                             />
                         </View>
                     </View>
@@ -141,7 +147,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                     {/* Grid: DOB and Gender */}
                     <View style={styles.rowGrid}>
                         <View style={[styles.inputGroup, { flex: 1 }]}>
-                            <Text style={styles.label}>Date of Birth</Text>
+                            <FixedText style={styles.label}>Date of Birth</FixedText>
                             <View style={styles.inputWrapper}>
                                 <MaterialIcons name="calendar-today" size={20} color="#71787E" style={styles.iconLeft} />
                                 <TextInput
@@ -150,22 +156,24 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                                     placeholderTextColor="#71787E"
                                     value={dob}
                                     onChangeText={setDob}
+                                    allowFontScaling={false}
+                                    maxFontSizeMultiplier={1}
                                 />
                             </View>
                         </View>
 
                         {/* Gender Dropdown Trigger */}
                         <View style={[styles.inputGroup, { flex: 1 }]}>
-                            <Text style={styles.label}>Gender</Text>
+                            <FixedText style={styles.label}>Gender</FixedText>
                             <TouchableOpacity
                                 style={styles.inputWrapper}
                                 activeOpacity={0.7}
                                 onPress={() => setActiveDropdown('gender')}
                             >
                                 <MaterialIcons name="wc" size={20} color="#71787E" style={styles.iconLeft} />
-                                <Text style={[styles.fauxSelectText, gender && styles.selectedText]}>
+                                <FixedText style={[styles.fauxSelectText, gender && styles.selectedText]}>
                                     {gender || 'Select'}
-                                </Text>
+                                </FixedText>
                                 <MaterialIcons name="expand-more" size={20} color="#71787E" style={styles.iconRight} />
                             </TouchableOpacity>
                         </View>
@@ -173,32 +181,32 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
 
                     {/* Relationship Dropdown Trigger */}
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Relationship</Text>
+                        <FixedText style={styles.label}>Relationship</FixedText>
                         <TouchableOpacity
                             style={styles.inputWrapper}
                             activeOpacity={0.7}
                             onPress={() => setActiveDropdown('relationship')}
                         >
                             <MaterialIcons name="people" size={20} color="#71787E" style={styles.iconLeft} />
-                            <Text style={[styles.fauxSelectText, relationship && styles.selectedText]}>
+                            <FixedText style={[styles.fauxSelectText, relationship && styles.selectedText]}>
                                 {relationship || 'Select relationship'}
-                            </Text>
+                            </FixedText>
                             <MaterialIcons name="expand-more" size={20} color="#71787E" style={styles.iconRight} />
                         </TouchableOpacity>
                     </View>
 
                     {/* Blood Group Dropdown Trigger */}
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Blood Group</Text>
+                        <FixedText style={styles.label}>Blood Group</FixedText>
                         <TouchableOpacity
                             style={styles.inputWrapper}
                             activeOpacity={0.7}
                             onPress={() => setActiveDropdown('bloodGroup')}
                         >
                             <MaterialIcons name="bloodtype" size={20} color="#71787E" style={styles.iconLeft} />
-                            <Text style={[styles.fauxSelectText, bloodGroup && styles.selectedText]}>
+                            <FixedText style={[styles.fauxSelectText, bloodGroup && styles.selectedText]}>
                                 {bloodGroup || 'Select option'}
-                            </Text>
+                            </FixedText>
                             <MaterialIcons name="expand-more" size={20} color="#71787E" style={styles.iconRight} />
                         </TouchableOpacity>
                     </View>
@@ -214,9 +222,9 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                             size={24}
                             color={termsAccepted ? "#32617D" : "#C1C7CD"}
                         />
-                        <Text style={styles.checkboxText}>
+                        <FixedText style={styles.checkboxText}>
                             I agree to the privacy policy and terms of service
-                        </Text>
+                        </FixedText>
                     </TouchableOpacity>
 
                 </View>
@@ -226,16 +234,16 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                     <TouchableOpacity
                         style={styles.button}
                         activeOpacity={0.85}
-                        // UPDATE THIS LINE
-                        onPress={() => navigation.replace('Dashboard')}
+                        // ROUTES TO THE MAIN TAB NAVIGATOR NOW
+                        onPress={() => navigation.replace('Main')}
                     >
-                        <Text style={styles.buttonText}>Sign Up</Text>
+                        <FixedText style={styles.buttonText}>Sign Up</FixedText>
                         <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
                     </TouchableOpacity>
 
                     <View style={styles.securityFooter}>
                         <MaterialIcons name="lock" size={14} color="#71787E" />
-                        <Text style={styles.securityText}>Your data is encrypted and securely stored.</Text>
+                        <FixedText style={styles.securityText}>Your data is encrypted and securely stored.</FixedText>
                     </View>
                 </View>
 
@@ -360,10 +368,10 @@ const styles = StyleSheet.create({
     fauxSelectText: {
         flex: 1,
         fontSize: 14,
-        color: '#71787E', // Acts as placeholder color
+        color: '#71787E',
     },
     selectedText: {
-        color: '#0B1C30', // Changes to dark color when a selection is made
+        color: '#0B1C30',
     },
     checkboxContainer: {
         flexDirection: 'row',
@@ -410,7 +418,7 @@ const styles = StyleSheet.create({
     /* --- Modal Dropdown Styles --- */
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(11, 28, 48, 0.5)', // Dark semi-transparent background
+        backgroundColor: 'rgba(11, 28, 48, 0.5)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 24,
