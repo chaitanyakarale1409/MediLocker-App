@@ -13,6 +13,7 @@ import {
     KeyboardAvoidingView,
     TouchableWithoutFeedback,
     Keyboard,
+    Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -27,7 +28,7 @@ interface Profile {
     age?: string;
 }
 
-// --- Accessibility Lock ---
+// --- Accessibility Lock (Overrides system text scaling to prevent layout breaks) ---
 const FixedText = (props: any) => (
     <Text allowFontScaling={false} maxFontSizeMultiplier={1} {...props} />
 );
@@ -64,7 +65,8 @@ export default function ProfilesScreen() {
             try {
                 setTimeout(() => {
                     const mockData: Profile[] = [
-                        { id: '1', fullName: 'John Doe', dob: '15/05/1985', gender: 'Male', relationship: 'Self', bloodGroup: 'O+', age: '40 years' },
+                        { id: '1', fullName: 'Aarohi Sharma', dob: '15/05/1998', gender: 'Female', relationship: 'Self', bloodGroup: 'O+', age: '26 years' },
+                        { id: '2', fullName: 'Rohan Sharma', dob: '10/10/2021', gender: 'Male', relationship: 'Child', bloodGroup: 'A+', age: '2 years' },
                     ];
                     setProfiles(mockData);
                     setActiveProfile(mockData[0]);
@@ -145,6 +147,21 @@ export default function ProfilesScreen() {
         closeModal();
     };
 
+    const confirmDeleteProfile = (id: string, name: string) => {
+        Alert.alert(
+            "Delete Profile",
+            `Are you sure you want to delete ${name}'s profile?`,
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: () => handleDeleteProfile(id)
+                }
+            ]
+        );
+    };
+
     const handleDeleteProfile = (id: string) => {
         setProfiles((prev) => prev.filter((p) => p.id !== id));
         if (activeProfile?.id === id) {
@@ -201,28 +218,28 @@ export default function ProfilesScreen() {
 
                 {/* HEADER */}
                 <View style={styles.header}>
-                    <View>
-                        <FixedText style={styles.eyebrow}>Family Health</FixedText>
+                    <View style={{ flex: 1 }}>
+                        <FixedText style={styles.eyebrow}>FAMILY HEALTH</FixedText>
                         <FixedText style={styles.title}>Family Profiles</FixedText>
-                        <FixedText style={styles.subtitle}>Manage health records for yourself and your loved ones.</FixedText>
                     </View>
-                    <View style={styles.headerIconWrapper}>
-                        <MaterialIcons name="person" size={28} color="#32617D" />
-                    </View>
+                    <TouchableOpacity style={styles.headerIconWrapper}>
+                        <MaterialIcons name="person" size={24} color="#0b1c30" />
+                    </TouchableOpacity>
                 </View>
+                <FixedText style={styles.subtitle}>Manage health records for yourself and your loved ones.</FixedText>
 
-                {/* STATS OVERVIEW - Updated to fit on one screen */}
+                {/* STATS OVERVIEW */}
                 <View style={styles.statsContainer}>
                     <View style={styles.statCard}>
-                        <FixedText style={styles.statLabel} numberOfLines={1}>Members</FixedText>
+                        <FixedText style={styles.statLabel} numberOfLines={1}>Family Members</FixedText>
                         <FixedText style={styles.statValue}>{profiles.length}</FixedText>
                     </View>
                     <View style={styles.statCard}>
-                        <FixedText style={styles.statLabel} numberOfLines={1}>Records</FixedText>
+                        <FixedText style={styles.statLabel} numberOfLines={1}>Total Records</FixedText>
                         <FixedText style={styles.statValue}>0</FixedText>
                     </View>
                     <View style={[styles.statCard, { marginRight: 0 }]}>
-                        <FixedText style={styles.statLabel} numberOfLines={1}>Active</FixedText>
+                        <FixedText style={styles.statLabel} numberOfLines={1}>Active Profile</FixedText>
                         <FixedText style={styles.statValue} numberOfLines={1}>
                             {activeProfile?.relationship || "-"}
                         </FixedText>
@@ -231,12 +248,12 @@ export default function ProfilesScreen() {
 
                 {/* ACTIVE PROFILE CARD */}
                 <View style={styles.activeProfileCard}>
-                    <View style={styles.activeProfileHeader}>
-                        <View style={styles.avatarLarge}>
-                            <FixedText style={styles.avatarLargeText}>{getInitials(activeProfile?.fullName || "")}</FixedText>
+                    <View style={styles.activeProfileLeft}>
+                        <View style={styles.avatarBox}>
+                            <FixedText style={styles.avatarBoxText}>{getInitials(activeProfile?.fullName || "")}</FixedText>
                         </View>
                         <View style={styles.activeProfileInfo}>
-                            <FixedText style={styles.activeProfileEyebrow}>Active Profile</FixedText>
+                            <FixedText style={styles.activeProfileEyebrow}>ACTIVE PROFILE</FixedText>
                             <FixedText style={styles.activeProfileName}>{activeProfile?.fullName || "Profile"}</FixedText>
                             <FixedText style={styles.activeProfileDetails}>
                                 {activeProfile?.relationship || "-"} • {activeProfile?.bloodGroup || "-"} • {activeProfile?.age || "-"}
@@ -245,77 +262,79 @@ export default function ProfilesScreen() {
                     </View>
                     <TouchableOpacity style={styles.switchButton} onPress={() => setShowProfileSwitcher(true)}>
                         <FixedText style={styles.switchButtonText}>Switch Profile</FixedText>
-                        <MaterialIcons name="chevron-right" size={20} color="#32617D" />
+                        <MaterialIcons name="chevron-right" size={18} color="#0b1c30" />
                     </TouchableOpacity>
                 </View>
 
-                {/* PROFILES GRID */}
+                {/* MANAGED PROFILES SECTION */}
                 <View style={styles.sectionHeader}>
                     <View style={styles.sectionTitleWrapper}>
                         <FixedText style={styles.sectionTitle}>Managed Profiles</FixedText>
-                        <FixedText style={styles.sectionSubtitle}>Switch between family members and manage their health.</FixedText>
+                        <FixedText style={styles.sectionSubtitle}>Switch between family members and manage their health records.</FixedText>
                     </View>
+                    <TouchableOpacity
+                        style={styles.addButton}
+                        onPress={() => {
+                            closeModal();
+                            setShowAddModal(true);
+                        }}
+                    >
+                        <MaterialIcons name="add" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <FixedText style={styles.addButtonText}>Add</FixedText>
+                    </TouchableOpacity>
                 </View>
 
-                {profiles.map((profile) => (
-                    <View key={profile.id} style={styles.profileCard}>
-                        <View style={styles.profileCardHeader}>
-                            <View style={styles.profileCardLeft}>
-                                <View style={styles.avatarSmall}>
-                                    <FixedText style={styles.avatarSmallText}>{getInitials(profile.fullName)}</FixedText>
-                                </View>
-                                <View style={styles.profileCardNameWrapper}>
-                                    <FixedText style={styles.profileCardName}>{profile.fullName}</FixedText>
-                                    <View style={styles.profileCardRoleRow}>
-                                        <FixedText style={styles.profileCardRole}>{profile.relationship}</FixedText>
-                                        {activeProfile?.id === profile.id && (
-                                            <View style={styles.activeBadge}>
-                                                <FixedText style={styles.activeBadgeText}>Active</FixedText>
-                                            </View>
-                                        )}
+                <View style={styles.profilesList}>
+                    {profiles.map((profile) => (
+                        <View key={profile.id} style={styles.profileCard}>
+                            {/* Card Header */}
+                            <View style={styles.profileCardHeader}>
+                                <View style={styles.profileCardLeft}>
+                                    <View style={styles.avatarCircle}>
+                                        <FixedText style={styles.avatarCircleText}>{getInitials(profile.fullName)}</FixedText>
+                                    </View>
+                                    <View style={styles.profileCardNameWrapper}>
+                                        <FixedText style={styles.profileCardName}>{profile.fullName}</FixedText>
+                                        <View style={styles.profileCardRoleRow}>
+                                            <FixedText style={styles.profileCardRole}>{profile.relationship}</FixedText>
+                                            {activeProfile?.id === profile.id && (
+                                                <View style={styles.activeBadge}>
+                                                    <FixedText style={styles.activeBadgeText}>ACTIVE</FixedText>
+                                                </View>
+                                            )}
+                                        </View>
                                     </View>
                                 </View>
+                                <View style={styles.actionButtons}>
+                                    <TouchableOpacity onPress={() => openEditModal(profile)} style={styles.iconButton}>
+                                        <MaterialIcons name="edit" size={18} color="#41484d" />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={() => confirmDeleteProfile(profile.id, profile.fullName)} style={[styles.iconButton, { backgroundColor: '#ffdad6' }]}>
+                                        <MaterialIcons name="delete" size={18} color="#ba1a1a" />
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                            <View style={styles.actionButtons}>
-                                <TouchableOpacity onPress={() => openEditModal(profile)} style={styles.iconButton}>
-                                    <MaterialIcons name="edit" size={20} color="#5C5F60" />
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => handleDeleteProfile(profile.id)} style={styles.iconButton}>
-                                    <MaterialIcons name="delete-outline" size={20} color="#EF4444" />
-                                </TouchableOpacity>
+
+                            {/* Card Stats Grid */}
+                            <View style={styles.profileCardStatsGrid}>
+                                <View style={styles.statBoxLight}>
+                                    <FixedText style={styles.statBoxLabel}>Age</FixedText>
+                                    <FixedText style={styles.statBoxValue}>{profile.age}</FixedText>
+                                </View>
+                                <View style={styles.statBoxLight}>
+                                    <FixedText style={styles.statBoxLabel}>Blood Group</FixedText>
+                                    <FixedText style={styles.statBoxValue}>{profile.bloodGroup}</FixedText>
+                                </View>
+                            </View>
+
+                            {/* Card Footer */}
+                            <View style={styles.recordsBox}>
+                                <MaterialIcons name="description" size={16} color="#41484d" />
+                                <FixedText style={styles.recordsText}>0 Records</FixedText>
                             </View>
                         </View>
-
-                        <View style={styles.profileCardStats}>
-                            <View style={styles.statBox}>
-                                <FixedText style={styles.statBoxLabel}>Age</FixedText>
-                                <FixedText style={styles.statBoxValue}>{profile.age}</FixedText>
-                            </View>
-                            <View style={styles.statBox}>
-                                <FixedText style={styles.statBoxLabel}>Blood Group</FixedText>
-                                <FixedText style={styles.statBoxValue}>{profile.bloodGroup}</FixedText>
-                            </View>
-                        </View>
-                    </View>
-                ))}
-
-                {/* ADD PROFILE BUTTON */}
-                <TouchableOpacity
-                    style={styles.addCard}
-                    onPress={() => {
-                        closeModal();
-                        setShowAddModal(true);
-                    }}
-                >
-                    <View style={styles.addIconWrapper}>
-                        <MaterialIcons name="add" size={28} color="#32617D" />
-                    </View>
-                    <FixedText style={styles.addCardTitle}>Add Family Member</FixedText>
-                    <FixedText style={styles.addCardDesc}>
-                        Create a profile for parents, spouse, children, or other family members.
-                    </FixedText>
-                </TouchableOpacity>
-
+                    ))}
+                </View>
             </ScrollView>
 
             {/* ======================================================== */}
@@ -363,7 +382,6 @@ export default function ProfilesScreen() {
                                         <View style={styles.inputGroup}>
                                             <FixedText style={styles.inputLabel}>Legal Full Name</FixedText>
                                             <View style={styles.inputBox}>
-                                                <MaterialIcons name="badge" size={20} color="#71787e" style={styles.inputIcon} />
                                                 <TextInput
                                                     style={styles.inputText}
                                                     placeholder="e.g. Jane Doe"
@@ -379,7 +397,6 @@ export default function ProfilesScreen() {
                                             <View style={styles.inputColLeft}>
                                                 <FixedText style={styles.inputLabel}>Date of Birth</FixedText>
                                                 <View style={styles.inputBox}>
-                                                    <MaterialIcons name="calendar-today" size={16} color="#71787e" style={styles.inputIcon} />
                                                     <TextInput
                                                         style={styles.inputText}
                                                         placeholder="DD/MM/YYYY"
@@ -403,7 +420,6 @@ export default function ProfilesScreen() {
                                                         { label: 'Other', value: 'Other' }
                                                     ], setGender)}
                                                 >
-                                                    <MaterialIcons name="wc" size={18} color="#71787e" style={styles.inputIcon} />
                                                     <FixedText numberOfLines={1} style={[styles.dropdownText, !gender && { color: '#71787e' }]}>
                                                         {gender || "Select"}
                                                     </FixedText>
@@ -427,7 +443,6 @@ export default function ProfilesScreen() {
                                                     { label: 'Other', value: 'Other' },
                                                 ], setRelationship)}
                                             >
-                                                <MaterialIcons name="group" size={20} color="#71787e" style={styles.inputIcon} />
                                                 <FixedText numberOfLines={1} style={[styles.dropdownText, !relationship && { color: '#71787e' }]}>
                                                     {relationship || "Select relationship"}
                                                 </FixedText>
@@ -448,7 +463,6 @@ export default function ProfilesScreen() {
                                                     { label: 'O+', value: 'O+' }, { label: 'O-', value: 'O-' },
                                                 ], setBloodGroup)}
                                             >
-                                                <MaterialIcons name="bloodtype" size={20} color="#71787e" style={styles.inputIcon} />
                                                 <FixedText numberOfLines={1} style={[styles.dropdownText, !bloodGroup && { color: '#71787e' }]}>
                                                     {bloodGroup || "Select option"}
                                                 </FixedText>
@@ -545,64 +559,63 @@ export default function ProfilesScreen() {
 }
 
 const styles = StyleSheet.create({
-    safeArea: { flex: 1, backgroundColor: '#F8F9FF' },
+    safeArea: { flex: 1, backgroundColor: '#f8f9ff' },
     container: { flex: 1 },
-    scrollContent: { padding: 20, paddingBottom: 40 },
-    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FF' },
-    loadingText: { marginTop: 12, color: '#5C5F60', fontSize: 14, fontWeight: '500' },
+    scrollContent: { padding: 16, paddingBottom: 40 },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8f9ff' },
+    loadingText: { marginTop: 12, color: '#41484d', fontSize: 14, fontWeight: '500' },
 
-    // Header & Overview Stats
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, marginTop: Platform.OS === 'android' ? 20 : 0 },
-    eyebrow: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, color: '#32617D' },
-    title: { fontSize: 28, fontWeight: '800', color: '#1E293B', marginTop: 4 },
-    subtitle: { fontSize: 13, color: '#64748B', marginTop: 4, maxWidth: '85%' },
-    headerIconWrapper: { width: 48, height: 48, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: Platform.OS === 'android' ? 20 : 8 },
+    eyebrow: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, color: '#32617d', marginBottom: 4 },
+    title: { fontSize: 28, fontWeight: '700', color: '#0b1c30', fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif' },
+    subtitle: { fontSize: 14, color: '#41484d', marginTop: 8, marginBottom: 24, lineHeight: 20 },
+    headerIconWrapper: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(193, 199, 205, 0.3)', alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
 
-    // UPDATED: Stats section changed to a row layout that shares width equally
     statsContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
-    statCard: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 12, marginRight: 8, borderWidth: 1, borderColor: '#E2E8F0' },
-    statLabel: { fontSize: 11, color: '#64748B', fontWeight: '500' },
-    statValue: { fontSize: 20, fontWeight: '700', color: '#1E293B', marginTop: 6 },
+    statCard: { flex: 1, backgroundColor: '#ffffff', borderRadius: 8, padding: 16, marginRight: 12, borderWidth: 1, borderColor: 'rgba(193, 199, 205, 0.3)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 2, justifyContent: 'center' },
+    statLabel: { fontSize: 11, color: '#41484d', fontWeight: '500', marginBottom: 8 },
+    statValue: { fontSize: 24, fontWeight: '700', color: '#0b1c30' },
 
-    // Cards
-    activeProfileCard: { backgroundColor: '#E6EFF5', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#D6E6F2', marginBottom: 32 },
-    activeProfileHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-    avatarLarge: { width: 64, height: 64, borderRadius: 18, backgroundColor: '#32617D', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
-    avatarLargeText: { color: '#FFFFFF', fontSize: 20, fontWeight: '700' },
+    activeProfileCard: { backgroundColor: '#ffffff', borderRadius: 8, padding: 16, paddingVertical: 24, borderWidth: 1, borderColor: 'rgba(193, 199, 205, 0.3)', marginBottom: 32, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    activeProfileLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+    avatarBox: { width: 48, height: 48, borderRadius: 4, backgroundColor: '#32617d', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+    avatarBoxText: { color: '#ffffff', fontSize: 24, fontWeight: '700' },
     activeProfileInfo: { flex: 1 },
-    activeProfileEyebrow: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', color: '#32617D', letterSpacing: 0.5 },
-    activeProfileName: { fontSize: 22, fontWeight: '700', color: '#1E293B', marginTop: 2 },
-    activeProfileDetails: { fontSize: 13, color: '#475569', marginTop: 4 },
-    switchButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D6E6F2', borderRadius: 16, paddingVertical: 12 },
-    switchButtonText: { fontSize: 14, fontWeight: '600', color: '#32617D', marginRight: 4 },
+    activeProfileEyebrow: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', color: '#32617d', letterSpacing: 0.5, marginBottom: 4 },
+    activeProfileName: { fontSize: 20, fontWeight: '600', color: '#0b1c30', marginBottom: 4 },
+    activeProfileDetails: { fontSize: 12, fontWeight: '500', color: '#41484d' },
+    switchButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#ffffff', borderWidth: 1, borderColor: 'rgba(193, 199, 205, 0.5)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
+    switchButtonText: { fontSize: 11, fontWeight: '600', color: '#0b1c30', marginRight: 2 },
 
-    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    sectionTitleWrapper: { flex: 1 },
-    sectionTitle: { fontSize: 20, fontWeight: '700', color: '#1E293B' },
-    sectionSubtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },
+    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
+    sectionTitleWrapper: { flex: 1, paddingRight: 16 },
+    sectionTitle: { fontSize: 20, fontWeight: '700', color: '#0b1c30', fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif', marginBottom: 4 },
+    sectionSubtitle: { fontSize: 14, color: '#41484d', lineHeight: 20 },
+    addButton: { backgroundColor: '#32617d', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center' },
+    addButtonText: { color: '#ffffff', fontSize: 12, fontWeight: '600' },
 
-    profileCard: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16 },
-    profileCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+    profilesList: { flexDirection: 'column', gap: 16 },
+    profileCard: { backgroundColor: '#ffffff', borderRadius: 8, padding: 16, borderWidth: 1, borderColor: 'rgba(193, 199, 205, 0.3)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 2 },
+    profileCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
     profileCardLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-    avatarSmall: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#E6EFF5', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-    avatarSmallText: { color: '#32617D', fontSize: 14, fontWeight: '700' },
+    avatarCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#e5eeff', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+    avatarCircleText: { color: '#32617d', fontSize: 14, fontWeight: '700' },
     profileCardNameWrapper: { flex: 1 },
-    profileCardName: { fontSize: 16, fontWeight: '700', color: '#1E293B' },
+    profileCardName: { fontSize: 14, fontWeight: '700', color: '#0b1c30' },
     profileCardRoleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
-    profileCardRole: { fontSize: 13, color: '#64748B', textTransform: 'capitalize' },
-    activeBadge: { backgroundColor: '#32617D', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, marginLeft: 8 },
-    activeBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
-    actionButtons: { flexDirection: 'row' },
-    iconButton: { padding: 6, marginLeft: 4 },
-    profileCardStats: { flexDirection: 'row', marginTop: 16 },
-    statBox: { flex: 1, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, marginRight: 12 },
-    statBoxLabel: { fontSize: 11, color: '#64748B' },
-    statBoxValue: { fontSize: 14, fontWeight: '600', color: '#1E293B', marginTop: 4 },
+    profileCardRole: { fontSize: 12, color: '#41484d', fontWeight: '500' },
+    activeBadge: { backgroundColor: '#32617d', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, marginLeft: 8 },
+    activeBadgeText: { color: '#ffffff', fontSize: 9, fontWeight: '700', letterSpacing: 0.5 },
+    actionButtons: { flexDirection: 'row', gap: 8 },
+    iconButton: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9ff' },
 
-    addCard: { backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: '#CBD5E1', borderStyle: 'dashed', borderRadius: 24, padding: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-    addIconWrapper: { width: 56, height: 56, borderRadius: 16, backgroundColor: '#E6EFF5', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-    addCardTitle: { fontSize: 16, fontWeight: '700', color: '#1E293B' },
-    addCardDesc: { fontSize: 13, color: '#64748B', textAlign: 'center', marginTop: 8, lineHeight: 18 },
+    profileCardStatsGrid: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+    statBoxLight: { flex: 1, backgroundColor: '#eff4ff', borderRadius: 6, padding: 12 },
+    statBoxLabel: { fontSize: 11, color: '#41484d', fontWeight: '500', marginBottom: 4 },
+    statBoxValue: { fontSize: 14, fontWeight: '700', color: '#0b1c30' },
+
+    recordsBox: { backgroundColor: '#eff4ff', borderRadius: 6, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
+    recordsText: { fontSize: 14, color: '#41484d', fontWeight: '500' },
 
     // --- FULL SCREEN MODAL FORM STYLES ---
     modalSafeArea: { flex: 1, backgroundColor: '#F8F9FF' },
@@ -620,29 +633,24 @@ const styles = StyleSheet.create({
     divider: { height: 1, backgroundColor: 'rgba(193, 199, 205, 0.2)', width: '100%', marginBottom: 20 },
 
     inputsWrapper: { width: '100%' },
-
     inputGroup: { marginBottom: 16, width: '100%' },
     inputLabel: { fontSize: 12, fontWeight: '500', color: '#0b1c30', marginBottom: 8 },
 
-    // Tightly controlled layout for Inputs/Dropdowns
     inputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#c1c7cd', borderRadius: 8, height: 50, paddingHorizontal: 12 },
     inputIcon: { marginRight: 10 },
     inputText: { flex: 1, fontSize: 14, color: '#0b1c30', height: '100%', padding: 0 },
     dropdownText: { flex: 1, fontSize: 14, color: '#0b1c30', paddingRight: 4 },
     rightIcon: { marginLeft: 'auto' },
 
-    // Precise 50/50 Columns
     inputRow: { flexDirection: 'row', width: '100%', justifyContent: 'space-between', marginBottom: 16 },
     inputColLeft: { flex: 1, marginRight: 8 },
     inputColRight: { flex: 1, marginLeft: 8 },
 
-    // Checkbox explicitly sized
     checkboxRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, paddingRight: 10, paddingVertical: 8 },
     checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: '#c1c7cd', backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
     checkboxActive: { backgroundColor: '#32617D', borderColor: '#32617D' },
     checkboxText: { fontSize: 14, color: '#41484d', flex: 1 },
 
-    // Footer Actions
     actionArea: { width: '100%', marginTop: 32 },
     actionRow: { flexDirection: 'row', gap: 12, width: '100%' },
     cancelBtn: { flex: 1, backgroundColor: '#dce9ff', height: 52, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
