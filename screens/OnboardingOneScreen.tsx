@@ -9,6 +9,8 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons'; // 👈 IMPORTED VECTOR ICONS
 
 const { width } = Dimensions.get('window');
 
@@ -17,19 +19,25 @@ interface OnboardingOneProps {
 }
 
 export default function OnboardingOneScreen({ navigation }: OnboardingOneProps) {
+  // Cross-platform safe area insets
+  const insets = useSafeAreaInsets();
+
   return (
     <View style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style="dark" translucent backgroundColor="transparent" />
 
+      {/* Skip Button */}
       <TouchableOpacity
-        style={styles.skip}
+        style={[styles.skip, { top: Math.max(insets.top + 15, 40) }]}
         activeOpacity={0.7}
         onPress={() => navigation.navigate('Onboarding3')}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Text style={styles.skipText}>Skip</Text>
+        <Text allowFontScaling={false} style={styles.skipText}>Skip</Text>
       </TouchableOpacity>
 
-      <View style={styles.imageWrapper}>
+      {/* Image Wrapper */}
+      <View style={[styles.imageWrapper, { paddingTop: Math.max(insets.top + 50, 80) }]}>
         <Image
           source={{
             uri: 'https://api.builder.io/api/v1/image/assets/TEMP/0a99536dc35485161aebde99dfa728e196bc3897?width=704',
@@ -39,22 +47,26 @@ export default function OnboardingOneScreen({ navigation }: OnboardingOneProps) 
         />
       </View>
 
-      <View style={styles.bottom}>
-        <Text style={styles.headline}>Organise All Your Records Digitally</Text>
-        <Text style={styles.subtext}>
+      {/* Bottom Content */}
+      <View style={[styles.bottom, { paddingBottom: Math.max(insets.bottom + 20, 48) }]}>
+        <Text allowFontScaling={false} style={styles.headline}>Organise All Your Records Digitally</Text>
+        <Text allowFontScaling={false} style={styles.subtext}>
           {'Upload, store, and find \nyour medical reports easily\nall in one safe place.'}
         </Text>
+
         <View style={styles.actionRow}>
           <View style={styles.dots}>
             <View style={[styles.dot, styles.dotActive]} />
             <View style={[styles.dot, styles.dotInactive]} />
           </View>
+
           <TouchableOpacity
             style={styles.arrowButton}
             activeOpacity={0.8}
             onPress={() => navigation.navigate('Onboarding2')}
           >
-            <Text style={styles.arrowText}>{'→'}</Text>
+            {/* 👈 REPLACED TEXT WITH A HIGH-QUALITY VECTOR ICON */}
+            <Feather name="arrow-right" size={28} color="#FFF" />
           </TouchableOpacity>
         </View>
       </View>
@@ -69,8 +81,7 @@ const styles = StyleSheet.create({
   },
   skip: {
     position: 'absolute',
-    top: 75,
-    right: 36,
+    right: 24,
     zIndex: 10,
   },
   skipText: {
@@ -81,8 +92,8 @@ const styles = StyleSheet.create({
   },
   imageWrapper: {
     flex: 1,
-    paddingTop: 91,
     paddingLeft: 20,
+    justifyContent: 'center',
   },
   image: {
     width: width - 56,
@@ -92,7 +103,6 @@ const styles = StyleSheet.create({
   },
   bottom: {
     paddingHorizontal: 44,
-    paddingBottom: 48,
   },
   headline: {
     fontSize: 22,
@@ -134,17 +144,14 @@ const styles = StyleSheet.create({
     width: 67,
     height: 65,
     borderRadius: 34,
-    backgroundColor: '#32617D',
+    backgroundColor: '#32617D', // Your blue/green circle background
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
-    shadowRadius: 35,
+    shadowRadius: 15,
     elevation: 8,
   },
-  arrowText: {
-    color: '#FFF',
-    fontSize: 26,
-  },
+  // 👈 arrowText style has been completely removed as it's no longer needed
 });

@@ -1,19 +1,31 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
+import {
+  Dimensions,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  StatusBar,
+  Platform
+} from 'react-native';
 import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const { width } = Dimensions.get('window');
 
 interface OnboardingThreeProps {
   navigation: NativeStackNavigationProp<any, any>;
 }
 
 export default function OnboardingThreeScreen({ navigation }: OnboardingThreeProps) {
+  const insets = useSafeAreaInsets();
+
   return (
     <View style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
 
-      <View style={styles.content}>
+      <View style={[styles.content, { marginTop: insets.top }]}>
         <Svg width={141} height={122} viewBox="0 0 141 122">
           <Defs>
             <LinearGradient id="grad" x1="0" y1="0" x2="1" y2="0">
@@ -27,20 +39,20 @@ export default function OnboardingThreeScreen({ navigation }: OnboardingThreePro
           />
         </Svg>
 
-        <Text style={styles.brandName}>Armedico</Text>
+        <Text allowFontScaling={false} style={styles.brandName}>Armedico</Text>
 
         <View style={styles.textBlock}>
-          <Text style={styles.headline}>Your Data, Fully Encrypted & Private</Text>
-          <Text style={styles.subtext}>Your medical records, organized and secure</Text>
+          <Text allowFontScaling={false} style={styles.headline}>Your Data, Fully Encrypted & Private</Text>
+          <Text allowFontScaling={false} style={styles.subtext}>Your medical records, organized and secure</Text>
         </View>
       </View>
 
       <TouchableOpacity
-        style={styles.button}
+        style={[styles.button, { marginBottom: Math.max(insets.bottom, 20) }]}
         activeOpacity={0.85}
         onPress={() => navigation.replace('Login')}
       >
-        <Text style={styles.buttonText}>Get Started</Text>
+        <Text allowFontScaling={false} style={styles.buttonText}>Get Started</Text>
       </TouchableOpacity>
     </View>
   );
@@ -51,17 +63,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFF',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingBottom: 60,
+    justifyContent: 'space-between', // Changed to space-between for better dynamic spacing
   },
   content: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 51,
+    paddingHorizontal: 40,
+    width: '100%',
   },
   brandName: {
-    fontFamily: 'Poppins',
     fontSize: 25,
     fontWeight: '600',
     color: '#223A6A',
@@ -71,27 +82,27 @@ const styles = StyleSheet.create({
   textBlock: {
     marginTop: 16,
     alignItems: 'center',
-    gap: 8,
   },
   headline: {
-    fontFamily: 'Poppins',
     fontSize: 22,
     fontWeight: '700',
     color: '#221F1F',
-    lineHeight: 29.7,
+    lineHeight: 30,
     textAlign: 'center',
+    paddingHorizontal: 20,
   },
   subtext: {
-    fontFamily: 'Poppins',
     fontSize: 16,
     fontWeight: '400',
     color: 'rgba(34,31,31,0.6)',
     lineHeight: 24,
     letterSpacing: 0.5,
     textAlign: 'center',
+    marginTop: 12,
   },
   button: {
-    width: 348,
+    width: '90%',
+    maxWidth: 400,
     height: 52,
     borderRadius: 8,
     backgroundColor: '#32617D',
@@ -99,9 +110,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   buttonText: {
-    fontSize: 24,
+    fontSize: 20, // Reduced slightly to ensure it fits better on all devices
     fontWeight: '700',
     color: '#FFF',
-    lineHeight: 28,
   },
 });

@@ -8,11 +8,19 @@ import {
     ScrollView,
     KeyboardAvoidingView,
     Platform,
-    Modal
+    Modal,
+    ActivityIndicator,
+    Alert
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../../context/AuthContext';
+
+// NOTE: Import your actual API function and Zustand store here
+// import { createProfileApi } from '../services/api/profile.api';
+// import { useProfileStore } from '../store/profile.store';
 
 interface ProfileSetupScreenProps {
     navigation: NativeStackNavigationProp<any, any>;
@@ -24,6 +32,9 @@ const FixedText = (props: any) => (
 );
 
 export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenProps) {
+    // Auth Context
+    const { setHasProfile } = useAuth();
+
     // Form State
     const [fullName, setFullName] = useState('');
     const [dob, setDob] = useState('');
@@ -37,6 +48,72 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
     // Tracks which dropdown modal is currently open ('gender', 'relationship', 'bloodGroup', or null)
     const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
+    // Loading State
+    const [loading, setLoading] = useState(false);
+
+    // Get your global state function if needed
+    // const setActiveProfile = useProfileStore((state) => state.setActiveProfile);
+
+    // API Call & Submission Handler
+    const handleCreateProfile = async () => {
+        // Basic Validation
+        if (!fullName || !dob || !gender || !relationship || !bloodGroup) {
+            Alert.alert("Missing Fields", "Please fill out all the required fields.");
+            return;
+        }
+
+        if (!termsAccepted) {
+            Alert.alert("Terms Required", "Please agree to the terms of service and privacy policy to continue.");
+            return;
+        }
+
+        try {
+            setLoading(true);
+
+            const token = await AsyncStorage.getItem('token');
+            const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/profiles`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    fullName,
+                    dob,
+                    gender,
+                    relationship,
+                    bloodGroup,
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || "Failed to create profile. Please try again.");
+            }
+
+            const newProfile = await response.json();
+
+            // Save the newly created profile as the active one locally
+            await AsyncStorage.setItem("active_profile", JSON.stringify(newProfile));
+
+            // Mark profile as created in auth context
+            await setHasProfile(true);
+
+            Alert.alert("Success", "Profile created successfully!");
+
+            // Route to main dashboard
+            navigation.replace('Main');
+
+        } catch (error: any) {
+            const message = typeof error?.response?.data?.message === "string"
+                ? error.response.data.message
+                : "Failed to create profile. Please try again.";
+            Alert.alert("Error", message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // Reusable Dropdown Renderer
     const renderDropdownModal = () => {
         let options: string[] = [];
@@ -48,7 +125,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
             onSelect = setGender;
             title = 'Select Gender';
         } else if (activeDropdown === 'relationship') {
-            options = ['Single', 'Married', 'Divorced', 'Widowed', 'Other'];
+            options = ['Self', 'Mother', 'Father', 'Spouse', 'Child', 'Other'];
             onSelect = setRelationship;
             title = 'Select Relationship';
         } else if (activeDropdown === 'bloodGroup') {
@@ -232,13 +309,19 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                 {/* Action Area */}
                 <View style={styles.actionArea}>
                     <TouchableOpacity
-                        style={styles.button}
+                        style={[styles.button, loading && { opacity: 0.7 }]}
                         activeOpacity={0.85}
-                        // ROUTES TO THE MAIN TAB NAVIGATOR NOW
-                        onPress={() => navigation.replace('Main')}
+                        onPress={handleCreateProfile}
+                        disabled={loading}
                     >
-                        <FixedText style={styles.buttonText}>Sign Up</FixedText>
-                        <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+                        {loading ? (
+                            <ActivityIndicator color="#FFFFFF" size="small" />
+                        ) : (
+                            <>
+                                <FixedText style={styles.buttonText}>Create Profile</FixedText>
+                                <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+                            </>
+                        )}
                     </TouchableOpacity>
 
                     <View style={styles.securityFooter}>

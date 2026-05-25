@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -6,12 +6,14 @@ import {
     ScrollView,
     TouchableOpacity,
     SafeAreaView,
-    Platform
+    Platform,
+    Modal,
+    ActivityIndicator
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useUser } from '../context/UserContext'; // Adjust path if needed
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Custom Text component to enforce font scaling lock and prevent UI misalignment
 const FixedText = (props: any) => (
@@ -21,9 +23,84 @@ const FixedText = (props: any) => (
 export default function DashboardScreen() {
     const navigation = useNavigation<any>();
 
-    // Read from Global State
-    const { userName } = useUser();
-    const initial = userName ? userName.charAt(0).toUpperCase() : '';
+    const [profiles, setProfiles] = useState<any[]>([]);
+    const [activeProfile, setActiveProfile] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [showProfileSwitcher, setShowProfileSwitcher] = useState(false);
+
+    useEffect(() => {
+        const fetchProfiles = async () => {
+            try {
+                const token = await AsyncStorage.getItem('token');
+                if (!token) return;
+
+                const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/profiles`, {
+                    method: "GET",
+                    headers: {
+                        "Authorization": `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    setProfiles(data || []);
+
+                    const savedProfile = await AsyncStorage.getItem("active_profile");
+                    let parsedSavedProfile: any = null;
+
+                    if (savedProfile) {
+                        try {
+                            parsedSavedProfile = JSON.parse(savedProfile);
+                        } catch {
+                            parsedSavedProfile = null;
+                        }
+                    }
+
+                    const matchedProfile = parsedSavedProfile
+                        ? data?.find((p: any) => p.id === parsedSavedProfile.id)
+                        : null;
+
+                    if (matchedProfile) {
+                        setActiveProfile(matchedProfile);
+                        await AsyncStorage.setItem("active_profile", JSON.stringify(matchedProfile));
+                    } else if (data?.length > 0) {
+                        setActiveProfile(data[0]);
+                        await AsyncStorage.setItem("active_profile", JSON.stringify(data[0]));
+                    } else {
+                        await AsyncStorage.removeItem("active_profile");
+                    }
+                }
+            } catch (error) {
+                console.error(error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchProfiles();
+    }, []);
+
+    const handleProfileSelect = async (profile: any) => {
+        setActiveProfile(profile);
+        await AsyncStorage.setItem("active_profile", JSON.stringify(profile));
+        setShowProfileSwitcher(false);
+    };
+
+    const getInitials = (name?: string) => {
+        if (!name) return "NA";
+        return name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+    };
+
+    const initial = getInitials(activeProfile?.fullName);
+
+    if (loading) {
+        return (
+            <SafeAreaView style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color="#32617d" />
+                <FixedText style={{ marginTop: 16, color: '#5c5f60' }}>Loading Dashboard...</FixedText>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -47,21 +124,25 @@ export default function DashboardScreen() {
 
                 {/* Active Profile Section */}
                 <View style={styles.activeProfileSection}>
-                    <TouchableOpacity style={styles.activeProfileCard} activeOpacity={0.7}>
+                    <TouchableOpacity
+                        style={styles.activeProfileCard}
+                        activeOpacity={0.7}
+                        onPress={() => setShowProfileSwitcher(true)}
+                    >
                         <View style={styles.activeProfileLeft}>
                             <View style={styles.avatarCircle}>
                                 <FixedText style={styles.avatarText}>{initial}</FixedText>
                             </View>
                             <View style={styles.activeProfileInfo}>
                                 <View style={styles.nameRow}>
-                                    <FixedText style={styles.profileName}>{userName}</FixedText>
+                                    <FixedText style={styles.profileName}>{activeProfile?.fullName || 'Profile'}</FixedText>
                                     <View style={styles.selfPill}>
-                                        <FixedText style={styles.selfPillText}>Self</FixedText>
+                                        <FixedText style={styles.selfPillText}>{activeProfile?.relationship || 'Self'}</FixedText>
                                     </View>
                                 </View>
                                 <View style={styles.bloodGroupRow}>
                                     <MaterialIcons name="bloodtype" size={16} color="#41484d" />
-                                    <FixedText style={styles.bloodGroupText}>Blood Group: O+</FixedText>
+                                    <FixedText style={styles.bloodGroupText}>Blood Group: {activeProfile?.bloodGroup || '-'}</FixedText>
                                 </View>
                             </View>
                         </View>
@@ -173,6 +254,51 @@ export default function DashboardScreen() {
                 </View>
 
             </ScrollView>
+
+            {/* Profile Switcher Modal */}
+            <Modal
+                visible={showProfileSwitcher}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowProfileSwitcher(false)}
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowProfileSwitcher(false)}
+                >
+                    <View style={styles.modalContent}>
+                        <FixedText style={styles.modalHeader}>Select Profile</FixedText>
+                        <ScrollView style={styles.modalScroll}>
+                            {profiles.map((profile) => (
+                                <TouchableOpacity
+                                    key={profile.id}
+                                    style={[
+                                        styles.profileOption,
+                                        activeProfile?.id === profile.id && styles.activeProfileOption
+                                    ]}
+                                    onPress={() => handleProfileSelect(profile)}
+                                >
+                                    <View style={styles.avatarCircleSmall}>
+                                        <FixedText style={styles.avatarTextSmall}>
+                                            {getInitials(profile.fullName)}
+                                        </FixedText>
+                                    </View>
+                                    <View style={styles.profileOptionInfo}>
+                                        <FixedText style={styles.profileOptionName}>{profile.fullName}</FixedText>
+                                        <FixedText style={styles.profileOptionRelation}>{profile.relationship}</FixedText>
+                                    </View>
+                                    {activeProfile?.id === profile.id && (
+                                        <View style={styles.activeBadge}>
+                                            <FixedText style={styles.activeBadgeText}>Active</FixedText>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -222,5 +348,20 @@ const styles = StyleSheet.create({
     recentCardTitle: { fontSize: 12, fontWeight: '600', color: '#0b1c30', textAlign: 'center', marginBottom: 2 },
     recentCardDate: { fontSize: 10, color: '#41484d', marginBottom: 8 },
     recentTagPill: { width: '100%', backgroundColor: '#dce9ff', paddingVertical: 4, borderRadius: 6, alignItems: 'center' },
-    recentTagText: { fontSize: 10, fontWeight: '600', color: '#32617d' }
+    recentTagText: { fontSize: 10, fontWeight: '600', color: '#32617d' },
+
+    // Modal Styles
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+    modalContent: { width: '85%', maxHeight: '60%', backgroundColor: '#ffffff', borderRadius: 16, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
+    modalHeader: { fontSize: 16, fontWeight: '700', color: '#0b1c30', textTransform: 'uppercase', marginBottom: 16, letterSpacing: 1 },
+    modalScroll: { width: '100%' },
+    profileOption: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, marginBottom: 8 },
+    activeProfileOption: { backgroundColor: '#eef4fa' },
+    avatarCircleSmall: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#32617d', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+    avatarTextSmall: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
+    profileOptionInfo: { flex: 1 },
+    profileOptionName: { fontSize: 16, fontWeight: '600', color: '#0b1c30' },
+    profileOptionRelation: { fontSize: 12, color: '#5c5f60', marginTop: 2 },
+    activeBadge: { backgroundColor: '#32617d', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 9999 },
+    activeBadgeText: { color: '#ffffff', fontSize: 10, fontWeight: '600' }
 });

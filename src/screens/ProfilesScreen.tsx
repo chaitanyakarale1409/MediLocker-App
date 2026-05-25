@@ -16,6 +16,7 @@ import {
     Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // --- Types ---
 interface Profile {
@@ -58,31 +59,11 @@ export default function ProfilesScreen() {
     const [relationship, setRelationship] = useState("");
     const [bloodGroup, setBloodGroup] = useState("");
     const [termsAccepted, setTermsAccepted] = useState(false);
-
-    // Simulated Fetch
-    useEffect(() => {
-        const fetchProfiles = async () => {
-            try {
-                setTimeout(() => {
-                    const mockData: Profile[] = [
-                        { id: '1', fullName: 'Aarohi Sharma', dob: '15/05/1998', gender: 'Female', relationship: 'Self', bloodGroup: 'O+', age: '26 years' },
-                        { id: '2', fullName: 'Rohan Sharma', dob: '10/10/2021', gender: 'Male', relationship: 'Child', bloodGroup: 'A+', age: '2 years' },
-                    ];
-                    setProfiles(mockData);
-                    setActiveProfile(mockData[0]);
-                    setLoading(false);
-                }, 1000);
-            } catch (error) {
-                console.error(error);
-                setLoading(false);
-            }
-        };
-        fetchProfiles();
-    }, []);
+    const [saving, setSaving] = useState(false);
 
     // Calculate Age from DD/MM/YYYY
     const calculateAge = (dobString: string) => {
-        if (dobString.length !== 10) return '-';
+        if (!dobString || dobString.length !== 10) return '-';
         const [day, month, year] = dobString.split('/');
         const dobDate = new Date(`${year}-${month}-${day}`);
         const today = new Date();
@@ -93,6 +74,68 @@ export default function ProfilesScreen() {
         }
         return isNaN(years) ? '-' : `${years} years`;
     };
+
+    // Format ISO Date from API to DD/MM/YYYY
+    const formatApiDateToLocal = (apiDateString: string) => {
+        if (!apiDateString) return "";
+        const dateObj = new Date(apiDateString);
+        if (isNaN(dateObj.getTime())) return "";
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const year = dateObj.getFullYear();
+        return `${day}/${month}/${year}`;
+    };
+
+    const fetchProfiles = async () => {
+        try {
+            setLoading(true);
+            const token = await AsyncStorage.getItem('token');
+            if (!token) return;
+
+            const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/profiles`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                
+                const formattedProfiles = data.map((p: any) => {
+                    const localDob = formatApiDateToLocal(p.dob);
+                    return {
+                        ...p,
+                        dob: localDob,
+                        age: localDob ? calculateAge(localDob) : '-'
+                    };
+                });
+
+                setProfiles(formattedProfiles);
+
+                const savedProfileStr = await AsyncStorage.getItem("active_profile");
+                if (savedProfileStr) {
+                    try { 
+                        const savedProfile = JSON.parse(savedProfileStr);
+                        // Make sure the saved profile is still in the fetched list
+                        const matched = formattedProfiles.find((p: any) => p.id === savedProfile.id);
+                        if (matched) {
+                            setActiveProfile(matched);
+                        } else if (formattedProfiles.length > 0) {
+                            setActiveProfile(formattedProfiles[0]);
+                        }
+                    } catch {}
+                } else if (formattedProfiles.length > 0) {
+                    setActiveProfile(formattedProfiles[0]);
+                }
+            }
+        } catch (error) {
+            console.error("Error fetching profiles:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchProfiles();
+    }, []);
 
     // Auto-Format Date to DD/MM/YYYY
     const handleDateChange = (text: string) => {
@@ -108,7 +151,7 @@ export default function ProfilesScreen() {
         setDob(formatted);
     };
 
-    const handleSaveProfile = () => {
+    const handleSaveProfile = async () => {
         Keyboard.dismiss();
 
         if (!fullName.trim() || !dob.trim() || !gender || !relationship || !bloodGroup) {
@@ -124,27 +167,47 @@ export default function ProfilesScreen() {
             return;
         }
 
-        const newProfileData = {
-            fullName,
-            dob,
-            gender,
-            relationship,
-            bloodGroup,
-            age: dob ? calculateAge(dob) : '-',
-        };
+        setSaving(true);
+        try {
+            const token = await AsyncStorage.getItem('token');
+            const [day, month, year] = dob.split('/');
+            const apiDate = `${year}-${month}-${day}`;
 
-        if (editingProfileId) {
-            setProfiles((prev) =>
-                prev.map((p) => (p.id === editingProfileId ? { ...p, ...newProfileData } : p))
-            );
-            if (activeProfile?.id === editingProfileId) {
-                setActiveProfile({ id: editingProfileId, ...newProfileData });
+            const payload = {
+                fullName,
+                dob: apiDate,
+                gender: gender.toLowerCase(),
+                relationship: relationship.toLowerCase(),
+                bloodGroup,
+            };
+
+            const url = editingProfileId 
+                ? `${process.env.EXPO_PUBLIC_API_URL}/profiles/${editingProfileId}`
+                : `${process.env.EXPO_PUBLIC_API_URL}/profiles`;
+                
+            const method = editingProfileId ? "PUT" : "POST";
+
+            const response = await fetch(url, {
+                method,
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                await fetchProfiles();
+                closeModal();
+            } else {
+                const err = await response.json();
+                Alert.alert("Error", err.message || "Failed to save profile");
             }
-        } else {
-            const newProfile = { id: Math.random().toString(), ...newProfileData };
-            setProfiles((prev) => [...prev, newProfile]);
+        } catch (error: any) {
+            Alert.alert("Error", "Something went wrong while saving profile.");
+        } finally {
+            setSaving(false);
         }
-        closeModal();
     };
 
     const confirmDeleteProfile = (id: string, name: string) => {
@@ -162,20 +225,50 @@ export default function ProfilesScreen() {
         );
     };
 
-    const handleDeleteProfile = (id: string) => {
-        setProfiles((prev) => prev.filter((p) => p.id !== id));
-        if (activeProfile?.id === id) {
-            setActiveProfile(profiles.find((p) => p.id !== id) || null);
+    const handleDeleteProfile = async (id: string) => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+            const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/profiles/${id}`, {
+                method: "DELETE",
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.ok) {
+                setProfiles((prev) => prev.filter((p) => p.id !== id));
+                if (activeProfile?.id === id) {
+                    const remaining = profiles.filter((p) => p.id !== id);
+                    const newActive = remaining.length > 0 ? remaining[0] : null;
+                    setActiveProfile(newActive);
+                    if (newActive) {
+                        AsyncStorage.setItem("active_profile", JSON.stringify(newActive));
+                    } else {
+                        AsyncStorage.removeItem("active_profile");
+                    }
+                }
+            } else {
+                Alert.alert("Error", "Failed to delete profile.");
+            }
+        } catch (error) {
+            Alert.alert("Error", "Something went wrong.");
         }
+    };
+
+    const handleSwitchProfile = (profile: Profile) => {
+        setActiveProfile(profile);
+        AsyncStorage.setItem("active_profile", JSON.stringify(profile));
+        setShowProfileSwitcher(false);
     };
 
     const openEditModal = (profile: Profile) => {
         setEditingProfileId(profile.id);
         setFullName(profile.fullName);
         setDob(profile.dob);
-        setGender(profile.gender);
-        setRelationship(profile.relationship);
-        setBloodGroup(profile.bloodGroup);
+        
+        // Capitalize for dropdown matching
+        setGender(profile.gender ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1) : "");
+        setRelationship(profile.relationship ? profile.relationship.charAt(0).toUpperCase() + profile.relationship.slice(1) : "");
+        setBloodGroup(profile.bloodGroup || "");
+        
         setTermsAccepted(true);
         setShowAddModal(true);
     };
@@ -337,6 +430,39 @@ export default function ProfilesScreen() {
                 </View>
             </ScrollView>
 
+            {/* --- PROFILE SWITCHER DROPDOWN OVERLAY --- */}
+            {showProfileSwitcher && (
+                <View style={styles.dropdownOverlay}>
+                    <TouchableOpacity
+                        style={styles.dropdownOutsideTap}
+                        activeOpacity={1}
+                        onPress={() => setShowProfileSwitcher(false)}
+                    />
+                    <View style={styles.dropdownContainer}>
+                        <View style={styles.dropdownHeader}>
+                            <FixedText style={styles.dropdownTitle}>Select Profile</FixedText>
+                            <TouchableOpacity onPress={() => setShowProfileSwitcher(false)}>
+                                <MaterialIcons name="close" size={24} color="#0b1c30" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+                            {profiles.map((profile) => (
+                                <TouchableOpacity
+                                    key={profile.id}
+                                    style={[styles.dropdownItem, activeProfile?.id === profile.id && { backgroundColor: '#f1f5f9' }]}
+                                    onPress={() => handleSwitchProfile(profile)}
+                                >
+                                    <FixedText style={[styles.dropdownItemText, activeProfile?.id === profile.id && { fontWeight: '700' }]}>
+                                        {profile.fullName} • {profile.relationship}
+                                    </FixedText>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </View>
+            )}
+
             {/* ======================================================== */}
             {/* 🟢 FULL-SCREEN MODAL FOR ADD / EDIT FORM                 */}
             {/* ======================================================== */}
@@ -492,13 +618,17 @@ export default function ProfilesScreen() {
                                     {/* Action Area */}
                                     <View style={styles.actionArea}>
                                         <View style={styles.actionRow}>
-                                            <TouchableOpacity style={styles.cancelBtn} onPress={closeModal}>
+                                            <TouchableOpacity style={styles.cancelBtn} onPress={closeModal} disabled={saving}>
                                                 <FixedText style={styles.cancelBtnText}>Cancel</FixedText>
                                             </TouchableOpacity>
-                                            <TouchableOpacity style={styles.submitBtn} onPress={handleSaveProfile}>
-                                                <FixedText style={styles.submitBtnText}>
-                                                    {editingProfileId ? "Update Profile" : "Create Profile"}
-                                                </FixedText>
+                                            <TouchableOpacity style={[styles.submitBtn, saving && { opacity: 0.7 }]} onPress={handleSaveProfile} disabled={saving}>
+                                                {saving ? (
+                                                    <ActivityIndicator size="small" color="#ffffff" />
+                                                ) : (
+                                                    <FixedText style={styles.submitBtnText}>
+                                                        {editingProfileId ? "Update Profile" : "Create Profile"}
+                                                    </FixedText>
+                                                )}
                                             </TouchableOpacity>
                                         </View>
 

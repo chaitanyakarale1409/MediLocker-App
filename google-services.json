@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "173041042274",
+    "project_id": "armedico-36f26",
+    "storage_bucket": "armedico-36f26.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:173041042274:android:0284918b083dd8b1a8e23b",
+        "android_client_info": {
+          "package_name": "com.chaitanya.medilocker"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "173041042274-8jl71jhou1j44sh91l2c2n91avr3e84l.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.chaitanya.medilocker",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "173041042274-6rhudo2pp9iu0v508andondiompj3bmt.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCjvP0Ldids7l_-EZlDrFArI_XvtHH2C6k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "173041042274-6rhudo2pp9iu0v508andondiompj3bmt.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

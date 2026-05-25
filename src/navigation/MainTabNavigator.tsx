@@ -6,10 +6,11 @@ import { MaterialIcons } from '@expo/vector-icons';
 // Screens
 import DashboardScreen from '../screens/DashboardScreen';
 import ProfilesScreen from '../screens/ProfilesScreen';
-import SearchScreen from '../screens/SearchScreen';
-import UploadScreen from '../screens/UploadScreen'; // NEW: Import it directly here
+import RecordsScreen from '../screens/RecordsScreen';
+import TimelineScreen from '../screens/TimelineScreen';
+import UploadScreen from '../screens/UploadScreen'; 
 
-// Temporary Dummy Screen for the Locker tab
+// Temporary Dummy Screen
 const DummyScreen = () => <View style={{ flex: 1, backgroundColor: '#F8F9FF' }} />;
 
 const Tab = createBottomTabNavigator();
@@ -56,8 +57,8 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
                 // Determine Icons based on route name
                 let iconName: any = 'dashboard';
                 if (route.name === 'Dashboard') iconName = 'dashboard';
-                if (route.name === 'Locker') iconName = 'folder';
-                if (route.name === 'Search') iconName = 'search';
+                if (route.name === 'Records') iconName = 'description';
+                if (route.name === 'Timeline') iconName = 'schedule';
                 if (route.name === 'Profile') iconName = 'person';
 
                 return (
@@ -84,12 +85,12 @@ export default function MainTabNavigator() {
             screenOptions={{ headerShown: false }}
         >
             <Tab.Screen name="Dashboard" component={DashboardScreen} />
-            <Tab.Screen name="Locker" component={DummyScreen} />
+            <Tab.Screen name="Records" component={RecordsScreen} />
 
             {/* UPDATED: We put the actual Upload screen here instead of a Placeholder */}
             <Tab.Screen name="Upload" component={UploadScreen} />
 
-            <Tab.Screen name="Search" component={SearchScreen} />
+            <Tab.Screen name="Timeline" component={TimelineScreen} />
             <Tab.Screen name="Profile" component={ProfilesScreen} />
         </Tab.Navigator>
     );

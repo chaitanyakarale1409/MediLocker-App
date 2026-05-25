@@ -9,6 +9,8 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons'; // 👈 IMPORTED VECTOR ICONS
 
 const { width } = Dimensions.get('window');
 
@@ -17,19 +19,25 @@ interface OnboardingTwoProps {
 }
 
 export default function OnboardingTwoScreen({ navigation }: OnboardingTwoProps) {
+  // Cross-platform safe area insets
+  const insets = useSafeAreaInsets();
+
   return (
     <View style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style="dark" translucent backgroundColor="transparent" />
 
+      {/* Skip Button: Dynamically positioned below the notch/status bar */}
       <TouchableOpacity
-        style={styles.skip}
+        style={[styles.skip, { top: Math.max(insets.top + 15, 40) }]}
         activeOpacity={0.7}
         onPress={() => navigation.navigate('Onboarding3')}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Text style={styles.skipText}>Skip</Text>
+        <Text allowFontScaling={false} style={styles.skipText}>Skip</Text>
       </TouchableOpacity>
 
-      <View style={styles.imageWrapper}>
+      {/* Image Wrapper: Dynamically padded so the image doesn't hit the top */}
+      <View style={[styles.imageWrapper, { paddingTop: Math.max(insets.top + 50, 80) }]}>
         <Image
           source={{
             uri: 'https://api.builder.io/api/v1/image/assets/TEMP/7ea70dcd9bbc2738e8f6bd2f588fb0d9079df6e9?width=784',
@@ -39,21 +47,25 @@ export default function OnboardingTwoScreen({ navigation }: OnboardingTwoProps) 
         />
       </View>
 
-      <View style={styles.bottom}>
-        <Text style={styles.headline}>
+      {/* Bottom Content: Dynamically padded to avoid the home indicator */}
+      <View style={[styles.bottom, { paddingBottom: Math.max(insets.bottom + 20, 48) }]}>
+        <Text allowFontScaling={false} style={styles.headline}>
           One Account, Multiple Family Profiles
         </Text>
+
         <View style={styles.actionRow}>
           <View style={styles.dots}>
             <View style={[styles.dot, styles.dotInactive]} />
             <View style={[styles.dot, styles.dotActive]} />
           </View>
+
           <TouchableOpacity
             style={styles.arrowButton}
             activeOpacity={0.8}
             onPress={() => navigation.navigate('Onboarding3')}
           >
-            <Text style={styles.arrowText}>{'→'}</Text>
+            {/* 👈 REPLACED TEXT WITH A HIGH-QUALITY VECTOR ICON */}
+            <Feather name="arrow-right" size={28} color="#FFF" />
           </TouchableOpacity>
         </View>
       </View>
@@ -68,8 +80,7 @@ const styles = StyleSheet.create({
   },
   skip: {
     position: 'absolute',
-    top: 75,
-    right: 36,
+    right: 24, // Adjusted slightly for safer edge clearance on all devices
     zIndex: 10,
   },
   skipText: {
@@ -80,8 +91,8 @@ const styles = StyleSheet.create({
   },
   imageWrapper: {
     flex: 1,
-    paddingTop: 127,
     paddingHorizontal: 18,
+    justifyContent: 'center', // Centers image vertically in the remaining space
   },
   image: {
     width: width - 36,
@@ -91,7 +102,6 @@ const styles = StyleSheet.create({
   },
   bottom: {
     paddingHorizontal: 44,
-    paddingBottom: 48,
   },
   headline: {
     fontSize: 22,
@@ -129,14 +139,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#32617D',
     alignItems: 'center',
     justifyContent: 'center',
+    // iOS shadow
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
-    shadowRadius: 35,
+    shadowRadius: 15,
+    // Android shadow
     elevation: 8,
   },
-  arrowText: {
-    color: '#FFF',
-    fontSize: 26,
-  },
+  // arrowText style has been removed as we are using vector icons now
 });
