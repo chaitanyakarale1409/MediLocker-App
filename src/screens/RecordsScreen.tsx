@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -20,6 +20,7 @@ import * as IntentLauncher from 'expo-intent-launcher';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { WebView } from 'react-native-webview';
+import { useFocusEffect } from '@react-navigation/native';
 
 // --- Accessibility Lock ---
 const FixedText = (props: any) => (
@@ -135,60 +136,62 @@ export default function RecordsScreen({ navigation }: any) {
     const [viewerName, setViewerName] = useState('');
     const [viewerMime, setViewerMime] = useState('');
 
-    useEffect(() => {
-        const fetchInitialData = async () => {
-            try {
-                const token = await AsyncStorage.getItem('token');
-                if (!token) return;
+    useFocusEffect(
+        useCallback(() => {
+            const fetchInitialData = async () => {
+                try {
+                    const token = await AsyncStorage.getItem('token');
+                    if (!token) return;
 
-                const headers = { 'Authorization': `Bearer ${token}` };
+                    const headers = { 'Authorization': `Bearer ${token}` };
 
-                const [profRes, catRes] = await Promise.all([
-                    fetch(`${process.env.EXPO_PUBLIC_API_URL}/profiles`, { headers }).catch(() => null),
-                    fetch(`${process.env.EXPO_PUBLIC_API_URL}/record-categories`, { headers }).catch(() => null)
-                ]);
-
-                let fetchedProfiles = [];
-                if (profRes && profRes.ok) {
-                    fetchedProfiles = await profRes.json();
-                    setProfiles(fetchedProfiles || []);
-
-                    const savedProfile = await AsyncStorage.getItem("active_profile");
-                    let parsedSavedProfile: any = null;
-                    if (savedProfile) {
-                        try { parsedSavedProfile = JSON.parse(savedProfile); } catch { }
-                    }
-
-                    const matchedProfile = parsedSavedProfile
-                        ? fetchedProfiles?.find((p: any) => p.id === parsedSavedProfile.id)
-                        : null;
-
-                    if (matchedProfile) {
-                        setSelectedProfile(matchedProfile);
-                    } else if (fetchedProfiles?.length > 0) {
-                        setSelectedProfile(fetchedProfiles[0]);
-                    }
-                }
-
-                if (catRes && catRes.ok) {
-                    const fetchedCategories = await catRes.json();
-                    setFilters([
-                        "All Types",
-                        ...(fetchedCategories && fetchedCategories.length > 0 ? fetchedCategories : FALLBACK_CATEGORIES).map((cat: any) => cat.name),
+                    const [profRes, catRes] = await Promise.all([
+                        fetch(`${process.env.EXPO_PUBLIC_API_URL}/profiles`, { headers }).catch(() => null),
+                        fetch(`${process.env.EXPO_PUBLIC_API_URL}/record-categories`, { headers }).catch(() => null)
                     ]);
-                } else {
-                    setFilters(["All Types", ...FALLBACK_CATEGORIES.map((cat: any) => cat.name)]);
-                }
-            } catch (error) {
-                console.error(error);
-                setFilters(["All Types", ...FALLBACK_CATEGORIES.map((cat: any) => cat.name)]);
-            } finally {
-                setLoading(false);
-            }
-        };
 
-        fetchInitialData();
-    }, []);
+                    let fetchedProfiles = [];
+                    if (profRes && profRes.ok) {
+                        fetchedProfiles = await profRes.json();
+                        setProfiles(fetchedProfiles || []);
+
+                        const savedProfile = await AsyncStorage.getItem("active_profile");
+                        let parsedSavedProfile: any = null;
+                        if (savedProfile) {
+                            try { parsedSavedProfile = JSON.parse(savedProfile); } catch { }
+                        }
+
+                        const matchedProfile = parsedSavedProfile
+                            ? fetchedProfiles?.find((p: any) => p.id === parsedSavedProfile.id)
+                            : null;
+
+                        if (matchedProfile) {
+                            setSelectedProfile(matchedProfile);
+                        } else if (fetchedProfiles?.length > 0) {
+                            setSelectedProfile(fetchedProfiles[0]);
+                        }
+                    }
+
+                    if (catRes && catRes.ok) {
+                        const fetchedCategories = await catRes.json();
+                        setFilters([
+                            "All Types",
+                            ...(fetchedCategories && fetchedCategories.length > 0 ? fetchedCategories : FALLBACK_CATEGORIES).map((cat: any) => cat.name),
+                        ]);
+                    } else {
+                        setFilters(["All Types", ...FALLBACK_CATEGORIES.map((cat: any) => cat.name)]);
+                    }
+                } catch (error) {
+                    console.error(error);
+                    setFilters(["All Types", ...FALLBACK_CATEGORIES.map((cat: any) => cat.name)]);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            fetchInitialData();
+        }, [])
+    );
 
     const fetchRecords = async () => {
         if (!selectedProfile?.id) {

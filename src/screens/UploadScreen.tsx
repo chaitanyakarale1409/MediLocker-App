@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View,
     Text,
@@ -16,12 +16,13 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Print from 'expo-print';
-import * as IntentLauncher from 'expo-intent-launcher';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { WebView } from 'react-native-webview';
+import * as IntentLauncher from 'expo-intent-launcher';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 
 // --- Accessibility Lock ---
 const FixedText = (props: any) => (
@@ -45,107 +46,106 @@ type FileEntry = { id: string; name: string; timestamp: string; uri: string; mim
 
 // --- UTILITY: copy any picker URI into app's cache ---
 const stableUri = async (uri: string, filename: string): Promise<string> => {
+    const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
     if (uri.startsWith(FileSystem.cacheDirectory!)) return uri;
-
-    const dest = FileSystem.cacheDirectory + filename;
+    const dest = FileSystem.cacheDirectory + safeFilename;
     const info = await FileSystem.getInfoAsync(dest);
     if (info.exists) await FileSystem.deleteAsync(dest, { idempotent: true });
     await FileSystem.copyAsync({ from: uri, to: dest });
     return dest;
 };
 
-const getImageDimensions = (uri: string): Promise<{ width: number, height: number }> => {
-    return new Promise((resolve) => {
-        Image.getSize(
-            uri,
-            (width, height) => resolve({ width, height }),
-            (error) => resolve({ width: 800, height: 1131 })
-        );
+// --- UTILITY: download a remote URL to cache and return local path ---
+const downloadToCache = async (remoteUrl: string, filename: string): Promise<string> => {
+    const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const dest = FileSystem.cacheDirectory + safeFilename;
+    const info = await FileSystem.getInfoAsync(dest);
+    if (info.exists) await FileSystem.deleteAsync(dest, { idempotent: true });
+    const token = await AsyncStorage.getItem('token');
+    const result = await FileSystem.downloadAsync(remoteUrl, dest, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
+    if (result.status !== 200) throw new Error(`Download failed: ${result.status}`);
+    return result.uri;
 };
+
+const getImageDimensions = (uri: string): Promise<{ width: number; height: number }> =>
+    new Promise((resolve) => {
+        Image.getSize(uri, (w, h) => resolve({ width: w, height: h }), () => resolve({ width: 800, height: 1131 }));
+    });
 
 const nowStamp = (): string => {
     const d = new Date();
-    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-        + ', '
-        + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    return (
+        d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) +
+        ', ' +
+        d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    );
 };
 
 // --- COMPONENT ---
 export default function UploadScreen({ navigation }: any) {
-
-    // API State
     const [profiles, setProfiles] = useState<any[]>([]);
     const [selectedProfile, setSelectedProfile] = useState<any>(null);
-
     const [categories, setCategories] = useState<any[]>(FALLBACK_CATEGORIES);
     const [selectedCategory, setSelectedCategory] = useState<any>(null);
     const [radiologySubcategories, setRadiologySubcategories] = useState<any[]>([]);
     const [selectedRadiologySubcategory, setSelectedRadiologySubcategory] = useState<any>(null);
-
     const [recentRecords, setRecentRecords] = useState<any[]>([]);
     const [uploading, setUploading] = useState(false);
-
-    // Form State
     const [uploadSource, setUploadSource] = useState<'camera' | 'gallery' | 'files' | null>(null);
     const [dropdownVisible, setDropdownVisible] = useState(false);
     const [dropdownType, setDropdownType] = useState<'main' | 'sub' | 'profile'>('main');
-
-    // Action Menu & Viewer State
     const [actionMenuVisible, setActionMenuVisible] = useState(false);
     const [activeItem, setActiveItem] = useState<any>(null);
     const [selectedFiles, setSelectedFiles] = useState<FileEntry[]>([]);
+
+    // Viewer state
     const [viewerVisible, setViewerVisible] = useState(false);
     const [viewerUri, setViewerUri] = useState('');
     const [viewerName, setViewerName] = useState('');
     const [viewerMime, setViewerMime] = useState('');
+    const [viewerLoading, setViewerLoading] = useState(false);
 
     // Fetch Initial Data
     const fetchApiData = async () => {
         try {
             const token = await AsyncStorage.getItem('token');
             if (!token) return;
-            const headers = { 'Authorization': `Bearer ${token}` };
+            const headers = { Authorization: `Bearer ${token}` };
 
             const [profRes, catRes, recRes] = await Promise.all([
                 fetch(`${process.env.EXPO_PUBLIC_API_URL}/profiles`, { headers }).catch(() => null),
                 fetch(`${process.env.EXPO_PUBLIC_API_URL}/record-categories`, { headers }).catch(() => null),
-                fetch(`${process.env.EXPO_PUBLIC_API_URL}/records`, { headers }).catch(() => null)
+                fetch(`${process.env.EXPO_PUBLIC_API_URL}/records`, { headers }).catch(() => null),
             ]);
 
             if (profRes && profRes.ok) {
                 const data = await profRes.json();
                 setProfiles(data || []);
-                const savedProfile = await AsyncStorage.getItem("active_profile");
+                const savedProfile = await AsyncStorage.getItem('active_profile');
                 if (savedProfile) {
                     try { setSelectedProfile(JSON.parse(savedProfile)); } catch { }
                 } else if (data?.length > 0) {
                     setSelectedProfile(data[0]);
                 }
             }
-
             if (catRes && catRes.ok) {
                 const data = await catRes.json();
-                if (data?.length > 0) {
-                    setCategories(data);
-                    setSelectedCategory(data[0]);
-                }
+                if (data?.length > 0) { setCategories(data); setSelectedCategory(data[0]); }
             }
-
             if (recRes && recRes.ok) {
                 const data = await recRes.json();
                 setRecentRecords(data || []);
             }
         } catch (err) {
-            console.error("Fetch Data Error:", err);
+            console.error('Fetch Data Error:', err);
         }
     };
 
-    useEffect(() => {
-        fetchApiData();
-    }, []);
+    useFocusEffect(useCallback(() => { fetchApiData(); }, []));
 
-    // file picking
+    // File picking
     const handleFilePick = async (source: 'camera' | 'gallery' | 'files') => {
         setUploadSource(source);
         try {
@@ -172,13 +172,13 @@ export default function UploadScreen({ navigation }: any) {
                     setSelectedFiles(p => [...p, ...files]);
                 }
             }
-        } catch (e) {
+        } catch {
             Alert.alert('Error', 'Something went wrong while selecting the file.');
         }
         setTimeout(() => setUploadSource(null), 500);
     };
 
-    // upload handler
+    // Upload handler
     const handleUpload = () => {
         if (!selectedFiles.length) { Alert.alert('Missing File', 'Please select a file to upload.'); return; }
         if (!selectedProfile?.id) { Alert.alert('Missing Profile', 'Please select a profile first.'); return; }
@@ -186,7 +186,6 @@ export default function UploadScreen({ navigation }: any) {
         if (selectedCategory?.name === 'Radiology (Report & Film)' && !selectedRadiologySubcategory) { Alert.alert('Missing Type', 'Please select a Radiology type.'); return; }
 
         const areAllImages = selectedFiles.length > 1 && selectedFiles.every(f => !f.name.toLowerCase().endsWith('.pdf'));
-
         if (areAllImages) {
             Alert.alert('Multiple Images Selected', 'Do you want to combine these into a single PDF or upload them separately?', [
                 { text: 'Cancel', style: 'cancel' },
@@ -202,227 +201,167 @@ export default function UploadScreen({ navigation }: any) {
         setUploading(true);
         try {
             const token = await AsyncStorage.getItem('token');
-            const filesToUpload = [];
+            const filesToUpload: { uri: string; name: string; type: string }[] = [];
 
             if (mode === 'pdf') {
                 const imagesToConvert = selectedFiles.filter(f => !f.name.toLowerCase().endsWith('.pdf'));
+                if (imagesToConvert.length === 0) { Alert.alert('Notice', 'Only image files can be combined into a PDF.'); setUploading(false); return; }
 
-                if (imagesToConvert.length === 0) {
-                    Alert.alert('Notice', 'Only image files can be combined into a PDF.');
-                    setUploading(false);
-                    return;
-                }
+                const firstSafe = await stableUri(imagesToConvert[0].uri, `temp_${imagesToConvert[0].id}`);
+                const { width: PAGE_W, height: PAGE_H } = await getImageDimensions(firstSafe);
 
-                const firstImageSafeUri = await stableUri(imagesToConvert[0].uri, `temp_${imagesToConvert[0].id}`);
-                const { width: PAGE_W, height: PAGE_H } = await getImageDimensions(firstImageSafeUri);
-
-                const pageDivs = await Promise.all(
-                    imagesToConvert.map(async (file) => {
-                        let currentUri = file.uri;
-
-                        // Resizing image step matching the web logic before base64 compilation
-                        try {
-                            const dims = await getImageDimensions(file.uri);
-                            const maxWidth = 1600;
-                            const maxHeight = 1600;
-                            const actions = [];
-
-                            if (dims.width > maxWidth || dims.height > maxHeight) {
-                                const ratio = Math.min(maxWidth / dims.width, maxHeight / dims.height);
-                                actions.push({
-                                    resize: {
-                                        width: Math.round(dims.width * ratio),
-                                        height: Math.round(dims.height * ratio)
-                                    }
-                                });
-                            }
-                            const manip = await ImageManipulator.manipulateAsync(
-                                file.uri,
-                                actions,
-                                { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
-                            );
-                            currentUri = manip.uri;
-                        } catch (e) {
-                            console.error("PDF image sizing downscaled fallback", e);
+                const pageDivs = await Promise.all(imagesToConvert.map(async (file) => {
+                    let currentUri = file.uri;
+                    try {
+                        const dims = await getImageDimensions(file.uri);
+                        const actions: any[] = [];
+                        if (dims.width > 1600 || dims.height > 1600) {
+                            const ratio = Math.min(1600 / dims.width, 1600 / dims.height);
+                            actions.push({ resize: { width: Math.round(dims.width * ratio), height: Math.round(dims.height * ratio) } });
                         }
+                        const manip = await ImageManipulator.manipulateAsync(file.uri, actions, { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG });
+                        currentUri = manip.uri;
+                    } catch (e) { console.error('PDF resize fallback', e); }
 
-                        const safeUri = await stableUri(currentUri, `upload_${file.id}_${file.name}`);
-                        const b64 = await FileSystem.readAsStringAsync(safeUri, { encoding: FileSystem.EncodingType.Base64 });
-                        const ext = file.name.split('.').pop()?.toLowerCase();
-                        const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+                    const safeUri = await stableUri(currentUri, `upload_${file.id}_${file.name}`);
+                    const b64 = await FileSystem.readAsStringAsync(safeUri, { encoding: FileSystem.EncodingType.Base64 });
+                    const mime = file.name.split('.').pop()?.toLowerCase() === 'png' ? 'image/png' : 'image/jpeg';
+                    return `<div class="page"><img src="data:${mime};base64,${b64}" /></div>`;
+                }));
 
-                        return `
-                            <div class="page">
-                                <img src="data:${mime};base64,${b64}" />
-                            </div>
-                        `;
-                    })
-                );
-
-                const html = `
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta charset="utf-8"/>
-                        <style>
-                            @page { margin: 0; size: ${PAGE_W}px ${PAGE_H}px; } 
-                            * { margin: 0; padding: 0; box-sizing: border-box; }
-                            html, body { width: ${PAGE_W}px; height: ${PAGE_H}px; background: #000000; }
-                            .page { width: ${PAGE_W}px; height: ${PAGE_H}px; display: flex; align-items: center; justify-content: center; page-break-after: always; page-break-inside: avoid; background: #000000; }
-                            .page img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; display: block; }
-                        </style>
-                    </head>
-                    <body>
-                        ${pageDivs.join('\n')}
-                    </body>
-                    </html>
-                `;
-
+                const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>@page{margin:0;size:${PAGE_W}px ${PAGE_H}px;}*{margin:0;padding:0;box-sizing:border-box;}html,body{width:${PAGE_W}px;height:${PAGE_H}px;background:#000;}.page{width:${PAGE_W}px;height:${PAGE_H}px;display:flex;align-items:center;justify-content:center;page-break-after:always;page-break-inside:avoid;background:#000;}.page img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;}</style></head><body>${pageDivs.join('\n')}</body></html>`;
                 const { uri: pdfUri } = await Print.printToFileAsync({ html, width: PAGE_W, height: PAGE_H, base64: false });
-                const pdfName = `combined-medical-record-${Date.now()}.pdf`;
-
-                filesToUpload.push({ uri: pdfUri, name: pdfName, type: 'application/pdf' });
+                filesToUpload.push({ uri: pdfUri, name: `combined-medical-record-${Date.now()}.pdf`, type: 'application/pdf' });
             } else {
                 for (const f of selectedFiles) {
                     let currentUri = f.uri;
                     let targetName = f.name;
-
-                    // Web App Canvas Resolution Matching for individual file mode
                     if (!f.name.toLowerCase().endsWith('.pdf')) {
                         try {
                             const dims = await getImageDimensions(f.uri);
-                            const maxWidth = 1600;
-                            const maxHeight = 1600;
-                            const actions = [];
-
-                            if (dims.width > maxWidth || dims.height > maxHeight) {
-                                const ratio = Math.min(maxWidth / dims.width, maxHeight / dims.height);
-                                actions.push({
-                                    resize: {
-                                        width: Math.round(dims.width * ratio),
-                                        height: Math.round(dims.height * ratio)
-                                    }
-                                });
+                            const actions: any[] = [];
+                            if (dims.width > 1600 || dims.height > 1600) {
+                                const ratio = Math.min(1600 / dims.width, 1600 / dims.height);
+                                actions.push({ resize: { width: Math.round(dims.width * ratio), height: Math.round(dims.height * ratio) } });
                             }
-                            const manip = await ImageManipulator.manipulateAsync(
-                                f.uri,
-                                actions,
-                                { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
-                            );
+                            const manip = await ImageManipulator.manipulateAsync(f.uri, actions, { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG });
                             currentUri = manip.uri;
                             targetName = f.name.replace(/\.(png|jpg|jpeg)$/i, '.jpg');
-                        } catch (err) {
-                            console.error("Downsizing exception fallback", err);
-                        }
+                        } catch (err) { console.error('Downsize fallback', err); }
                     }
-
                     const ext = targetName.includes('.') ? targetName.split('.').pop() : 'tmp';
                     const safeUri = await stableUri(currentUri, `upload_cache_${f.id}.${ext}`);
-
                     let strictType = 'application/octet-stream';
-                    const lowerName = targetName.toLowerCase();
-                    if (lowerName.endsWith('.pdf')) strictType = 'application/pdf';
-                    else if (lowerName.endsWith('.png')) strictType = 'image/png';
-                    else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) strictType = 'image/jpeg';
-
-                    filesToUpload.push({
-                        uri: safeUri,
-                        name: targetName,
-                        type: strictType
-                    });
+                    const ln = targetName.toLowerCase();
+                    if (ln.endsWith('.pdf')) strictType = 'application/pdf';
+                    else if (ln.endsWith('.png')) strictType = 'image/png';
+                    else if (ln.endsWith('.jpg') || ln.endsWith('.jpeg')) strictType = 'image/jpeg';
+                    filesToUpload.push({ uri: safeUri, name: targetName, type: strictType });
                 }
             }
 
             for (const file of filesToUpload) {
                 const formData = new FormData();
-
-                // Form field sequences aligned to backend multi-stream reader configuration
-                formData.append("title", String(file.name));
-                formData.append("profileId", String(selectedProfile?.id));
-
-                const catId = selectedRadiologySubcategory?.id || selectedCategory?.id;
-                formData.append("categoryId", String(catId));
-                formData.append("notes", "");
-
-                formData.append("file", {
-                    uri: file.uri,
-                    name: file.name,
-                    type: file.type
-                } as any);
-
+                formData.append('title', String(file.name));
+                formData.append('profileId', String(selectedProfile?.id));
+                formData.append('categoryId', String(selectedRadiologySubcategory?.id || selectedCategory?.id));
+                formData.append('notes', '');
+                formData.append('file', { uri: file.uri, name: file.name, type: file.type } as any);
                 const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/records/upload`, {
-                    method: "POST",
-                    headers: { "Authorization": `Bearer ${token}` },
-                    body: formData
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}` },
+                    body: formData,
                 });
-
                 if (!response.ok) {
                     const err = await response.json().catch(() => ({}));
-                    throw new Error(err.message || "Upload failed");
+                    throw new Error(err.message || 'Upload failed');
                 }
             }
 
-            Alert.alert("Success", "Files uploaded successfully");
+            Alert.alert('Success', 'Files uploaded successfully');
             setSelectedFiles([]);
             fetchApiData();
-
         } catch (err: any) {
-            Alert.alert("Error", err.message || "Something went wrong during upload");
+            Alert.alert('Error', err.message || 'Something went wrong during upload');
         } finally {
             setUploading(false);
         }
     };
 
-    // VIEWER LOGIC 
+    // ─────────────────────────────────────────────────────────────
+    // VIEWER — opens PDF in-app on BOTH iOS and Android
+    //
+    // iOS:   WebView handles PDFs natively — no change needed
+    // Android: react-native-pdf renders PDFs in-app using the
+    //          native Android PDF renderer (no external app needed)
+    //
+    // For remote PDFs on Android: react-native-pdf accepts http://
+    // URLs directly BUT requires the Authorization header. So we
+    // download to cache first, then pass the local file:// URI.
+    // ─────────────────────────────────────────────────────────────
     const handleViewFile = async (item: any) => {
-        const fileUrl = item.fileUrl ? `${process.env.EXPO_PUBLIC_API_URL}${item.fileUrl}` : item.uri;
-        const format = item.fileType?.includes('pdf') || item.format === 'pdf' ? 'pdf' : 'image';
+        const fileUrl = item.fileUrl
+            ? `${process.env.EXPO_PUBLIC_API_URL}${item.fileUrl}`
+            : item.uri;
 
-        if (!fileUrl) {
-            Alert.alert('Error', 'Invalid file URL.');
-            return;
-        }
+        const isPdf =
+            item.fileType?.includes('pdf') ||
+            item.format === 'pdf' ||
+            (fileUrl && fileUrl.toLowerCase().includes('.pdf'));
 
+        if (!fileUrl) { Alert.alert('Error', 'Invalid file URL.'); return; }
+
+        setViewerLoading(true);
         try {
-            if (fileUrl.startsWith('http')) {
-                setViewerName(item.title || item.name);
-                setViewerUri(fileUrl);
-                setViewerMime(format === 'image' ? 'image/jpeg' : 'application/pdf');
-                setViewerVisible(true);
-            } else {
-                const safeUri = await stableUri(fileUrl, `view_${item.name}`);
-                if (Platform.OS === 'android' && format === 'pdf') {
-                    const contentUri = await FileSystem.getContentUriAsync(safeUri);
-                    await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-                        data: contentUri, flags: 1, type: 'application/pdf',
-                    });
-                    return;
+            if (isPdf && Platform.OS === 'android') {
+                let finalUri = fileUrl;
+                if (fileUrl.startsWith('http')) {
+                    const filename = `view_pdf_${item.id || Date.now()}.pdf`;
+                    finalUri = await downloadToCache(fileUrl, filename);
+                } else {
+                    finalUri = await stableUri(fileUrl, `view_${item.id || Date.now()}`);
                 }
-                setViewerName(item.title || item.name);
+                const contentUri = await FileSystem.getContentUriAsync(finalUri);
+                setViewerVisible(false);
+                await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+                    data: contentUri, flags: 1, type: 'application/pdf',
+                });
+                setViewerLoading(false);
+                return;
+            } else if (!fileUrl.startsWith('http')) {
+                // Local file — stabilise path
+                const safeUri = await stableUri(fileUrl, `view_${item.id || Date.now()}`);
                 setViewerUri(safeUri);
-                setViewerMime(format === 'image' ? 'image/jpeg' : 'application/pdf');
-                setViewerVisible(true);
+            } else {
+                // Remote image or iOS PDF — use URL directly
+                setViewerUri(fileUrl);
             }
+
+            setViewerName(item.title || item.name || 'Document');
+            setViewerMime(isPdf ? 'application/pdf' : 'image/jpeg');
+            setViewerVisible(true);
         } catch (err: any) {
-            Alert.alert('Error', 'Could not open file.');
+            Alert.alert('Error', 'Could not open file. Please try again.');
+            console.error('Viewer open error:', err);
+        } finally {
+            setViewerLoading(false);
         }
     };
 
     const handleDownloadFile = async (item: any) => {
         const fileUrl = item.fileUrl ? `${process.env.EXPO_PUBLIC_API_URL}${item.fileUrl}` : item.uri;
-        if (!fileUrl) {
-            Alert.alert('Error', 'Invalid file URL.');
-            return;
-        }
-
+        if (!fileUrl) { Alert.alert('Error', 'Invalid file URL.'); return; }
         try {
-            const safeUri = await stableUri(fileUrl, `download_${item.title || item.name || 'document'}`);
+            const filename = item.title || item.name || 'document';
+            const localUri = fileUrl.startsWith('http')
+                ? await downloadToCache(fileUrl, `download_${filename}`)
+                : await stableUri(fileUrl, `download_${filename}`);
             if (await Sharing.isAvailableAsync()) {
-                await Sharing.shareAsync(safeUri, { dialogTitle: 'Save Document' });
+                await Sharing.shareAsync(localUri, { dialogTitle: 'Save Document' });
             } else {
-                Alert.alert('Notice', 'Sharing/Saving is not available on this device.');
+                Alert.alert('Notice', 'Sharing is not available on this device.');
             }
-        } catch (error) {
+        } catch {
             Alert.alert('Error', 'Could not download file.');
         }
     };
@@ -436,21 +375,16 @@ export default function UploadScreen({ navigation }: any) {
                         const token = await AsyncStorage.getItem('token');
                         await fetch(`${process.env.EXPO_PUBLIC_API_URL}/records/${id}`, {
                             method: 'DELETE',
-                            headers: { "Authorization": `Bearer ${token}` }
+                            headers: { Authorization: `Bearer ${token}` },
                         });
                         fetchApiData();
-                    } catch (e) {
-                        Alert.alert('Error', 'Failed to delete record');
-                    }
-                }
+                    } catch { Alert.alert('Error', 'Failed to delete record'); }
+                },
             },
         ]);
     };
 
-    const openDropdown = (type: 'main' | 'sub' | 'profile') => {
-        setDropdownType(type);
-        setDropdownVisible(true);
-    };
+    const openDropdown = (type: 'main' | 'sub' | 'profile') => { setDropdownType(type); setDropdownVisible(true); };
 
     const handleDropdownSelect = (item: any) => {
         if (dropdownType === 'main') {
@@ -463,17 +397,20 @@ export default function UploadScreen({ navigation }: any) {
             }
         } else if (dropdownType === 'sub') {
             setSelectedRadiologySubcategory(item);
-        } else if (dropdownType === 'profile') {
+        } else {
             setSelectedProfile(item);
-            AsyncStorage.setItem("active_profile", JSON.stringify(item));
+            AsyncStorage.setItem('active_profile', JSON.stringify(item));
         }
         setDropdownVisible(false);
     };
 
     const getInitials = (name?: string) => {
-        if (!name) return "NA";
-        return name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+        if (!name) return 'NA';
+        return name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
     };
+
+    // Determine which viewer to render inside the modal
+    const isPdfViewer = viewerMime === 'application/pdf';
 
     return (
         <SafeAreaView style={s.safeArea}>
@@ -517,7 +454,6 @@ export default function UploadScreen({ navigation }: any) {
                         <View style={s.familySection}>
                             <FixedText style={s.familyHeaderTitle}>UPLOADING FOR</FixedText>
                             <FixedText style={s.familySubTitle}>Choose family member for this record</FixedText>
-
                             <TouchableOpacity style={s.familyCard} activeOpacity={0.8} onPress={() => openDropdown('profile')}>
                                 <View style={s.familyAvatar}>
                                     <FixedText style={s.familyInitials}>{getInitials(selectedProfile?.fullName)}</FixedText>
@@ -562,11 +498,7 @@ export default function UploadScreen({ navigation }: any) {
                                         <View style={s.stagedIcon}>
                                             {f.uri && !f.name.toLowerCase().endsWith('.pdf')
                                                 ? <Image source={{ uri: f.uri }} style={s.thumb} />
-                                                : <MaterialIcons
-                                                    name={f.name.toLowerCase().endsWith('.pdf') ? 'picture-as-pdf' : 'image'}
-                                                    size={24}
-                                                    color={'#32617D'}
-                                                />
+                                                : <MaterialIcons name={f.name.toLowerCase().endsWith('.pdf') ? 'picture-as-pdf' : 'image'} size={24} color="#32617D" />
                                             }
                                         </View>
                                         <View style={s.stagedInfo}>
@@ -606,17 +538,9 @@ export default function UploadScreen({ navigation }: any) {
                                 const isPdf = item.fileType?.includes('pdf');
                                 return (
                                     <View key={item.id} style={s.recentItem}>
-                                        <TouchableOpacity
-                                            style={s.recentLeft}
-                                            activeOpacity={0.7}
-                                            onPress={() => handleViewFile(item)}
-                                        >
+                                        <TouchableOpacity style={s.recentLeft} activeOpacity={0.7} onPress={() => handleViewFile(item)}>
                                             <View style={[s.recentIcon, isPdf ? s.pdfBg : s.imgBg]}>
-                                                <MaterialIcons
-                                                    name={isPdf ? 'description' : 'science'}
-                                                    size={24}
-                                                    color={isPdf ? '#fcfcff' : '#2D8A6F'}
-                                                />
+                                                <MaterialIcons name={isPdf ? 'description' : 'science'} size={24} color={isPdf ? '#fcfcff' : '#2D8A6F'} />
                                             </View>
                                             <View style={s.recentInfo}>
                                                 <FixedText style={s.recentName} numberOfLines={1}>{item.title}</FixedText>
@@ -640,40 +564,34 @@ export default function UploadScreen({ navigation }: any) {
 
                 </ScrollView>
 
+                {/* --- LOADING OVERLAY (while preparing viewer) --- */}
+                {viewerLoading && (
+                    <View style={s.loadingOverlay}>
+                        <ActivityIndicator size="large" color="#32617D" />
+                        <FixedText style={s.loadingText}>Opening document...</FixedText>
+                    </View>
+                )}
+
                 {/* --- ITEM ACTION MENU OVERLAY --- */}
                 {actionMenuVisible && activeItem && (
                     <View style={s.overlay}>
                         <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setActionMenuVisible(false)} />
                         <View style={s.sheet}>
                             <View style={s.sheetHeader}>
-                                <FixedText style={[s.sheetTitle, { flex: 1, marginRight: 16 }]} numberOfLines={1}>
-                                    {activeItem.title || activeItem.name}
-                                </FixedText>
+                                <FixedText style={[s.sheetTitle, { flex: 1, marginRight: 16 }]} numberOfLines={1}>{activeItem.title || activeItem.name}</FixedText>
                                 <TouchableOpacity onPress={() => setActionMenuVisible(false)}>
                                     <MaterialIcons name="close" size={24} color="#0b1c30" />
                                 </TouchableOpacity>
                             </View>
-
-                            <TouchableOpacity
-                                style={s.sheetActionItem}
-                                onPress={() => { setActionMenuVisible(false); handleViewFile(activeItem); }}
-                            >
+                            <TouchableOpacity style={s.sheetActionItem} onPress={() => { setActionMenuVisible(false); handleViewFile(activeItem); }}>
                                 <MaterialIcons name="visibility" size={24} color="#32617D" />
                                 <FixedText style={s.sheetActionText}>View Document</FixedText>
                             </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={s.sheetActionItem}
-                                onPress={() => { setActionMenuVisible(false); handleDownloadFile(activeItem); }}
-                            >
+                            <TouchableOpacity style={s.sheetActionItem} onPress={() => { setActionMenuVisible(false); handleDownloadFile(activeItem); }}>
                                 <MaterialIcons name="file-download" size={24} color="#32617D" />
                                 <FixedText style={s.sheetActionText}>Download / Save</FixedText>
                             </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[s.sheetActionItem, { borderBottomWidth: 0 }]}
-                                onPress={() => { setActionMenuVisible(false); handleDeleteRecent(activeItem.id); }}
-                            >
+                            <TouchableOpacity style={[s.sheetActionItem, { borderBottomWidth: 0 }]} onPress={() => { setActionMenuVisible(false); handleDeleteRecent(activeItem.id); }}>
                                 <MaterialIcons name="delete-outline" size={24} color="#ba1a1a" />
                                 <FixedText style={[s.sheetActionText, { color: '#ba1a1a' }]}>Delete Record</FixedText>
                             </TouchableOpacity>
@@ -705,51 +623,65 @@ export default function UploadScreen({ navigation }: any) {
                     </View>
                 )}
 
-                {/* --- IN-APP VIEWER MODAL --- */}
+                {/* ─────────────────────────────────────────────────────────────
+                    IN-APP VIEWER MODAL
+                    • Images:      <Image> on both platforms
+                    • PDF iOS:     <WebView> (native WKWebView renders PDFs)
+                    • PDF Android: <Pdf> from react-native-pdf (native renderer,
+                                   no external app, no white screen)
+                ───────────────────────────────────────────────────────────── */}
                 <Modal
                     visible={viewerVisible}
                     animationType="slide"
                     presentationStyle="fullScreen"
                     onRequestClose={() => setViewerVisible(false)}
                 >
-                    <SafeAreaView style={[s.viewerSafe, viewerMime.startsWith('image') && { backgroundColor: '#000' }]}>
-                        <View style={[s.viewerHeader, viewerMime.startsWith('image') && s.viewerHeaderDark]}>
+                    <SafeAreaView style={[s.viewerSafe, !isPdfViewer && { backgroundColor: '#000' }]}>
+
+                        {/* Header bar */}
+                        <View style={[s.viewerHeader, !isPdfViewer && s.viewerHeaderDark]}>
                             <TouchableOpacity
-                                style={[s.backBtn, viewerMime.startsWith('image') && { backgroundColor: '#333' }]}
+                                style={[s.backBtn, !isPdfViewer && { backgroundColor: '#333' }]}
                                 onPress={() => setViewerVisible(false)}
                             >
-                                <MaterialIcons name="arrow-back" size={24} color={viewerMime.startsWith('image') ? "#ffffff" : "#0b1c30"} />
+                                <MaterialIcons name="arrow-back" size={24} color={isPdfViewer ? '#0b1c30' : '#ffffff'} />
                             </TouchableOpacity>
-                            <FixedText style={[s.viewerTitle, viewerMime.startsWith('image') && { color: '#ffffff' }]} numberOfLines={1}>
+                            <FixedText
+                                style={[s.viewerTitle, !isPdfViewer && { color: '#ffffff' }]}
+                                numberOfLines={1}
+                            >
                                 {viewerName}
                             </FixedText>
                             <View style={{ width: 40 }} />
                         </View>
 
-                        {viewerUri ? (
-                            viewerMime.startsWith('image') ? (
-                                <View style={s.imageViewerContainer}>
-                                    <Image
-                                        source={{ uri: viewerUri }}
-                                        style={s.fullImage}
-                                        resizeMode="contain"
-                                    />
-                                </View>
-                            ) : (
-                                <WebView
-                                    style={{ flex: 1, backgroundColor: '#ffffff' }}
-                                    source={{ uri: viewerUri }}
-                                    allowFileAccess={true}
-                                    allowFileAccessFromFileURLs={true}
-                                    allowUniversalAccessFromFileURLs={true}
-                                    originWhitelist={['*']}
-                                    scalesPageToFit={true}
-                                    bounces={false}
-                                />
-                            )
-                        ) : (
+                        {/* Content area */}
+                        {!viewerUri ? (
                             <View style={s.viewerLoader}>
                                 <ActivityIndicator size="large" color="#32617D" />
+                            </View>
+                        ) : !isPdfViewer ? (
+                            /* ── IMAGE viewer ── */
+                            <View style={s.imageViewerContainer}>
+                                <Image source={{ uri: viewerUri }} style={s.fullImage} resizeMode="contain" />
+                            </View>
+                        ) : Platform.OS === 'ios' ? (
+                            /* ── PDF on iOS: WKWebView renders natively ── */
+                            <WebView
+                                style={{ flex: 1, backgroundColor: '#ffffff' }}
+                                source={{ uri: viewerUri }}
+                                allowFileAccess
+                                allowFileAccessFromFileURLs
+                                allowUniversalAccessFromFileURLs
+                                originWhitelist={['*']}
+                                scalesPageToFit
+                                bounces={false}
+                            />
+                        ) : (
+                            /* ── PDF on Android: IntentLauncher opens external viewer ── */
+                            <View style={s.viewerLoader}>
+                                <ActivityIndicator size="large" color="#32617D" />
+                                <FixedText style={s.loadingText}>Opening in external viewer...</FixedText>
                             </View>
                         )}
                     </SafeAreaView>
@@ -765,118 +697,57 @@ const s = StyleSheet.create({
     container: { flex: 1 },
     scroll: { paddingHorizontal: 16, paddingTop: Platform.OS === 'android' ? 24 : 16, paddingBottom: 40, gap: 32 },
 
-    // Header
     header: { paddingTop: 24, paddingBottom: 8, gap: 8 },
     title: { fontSize: 28, fontWeight: '600', color: '#32617d' },
     subtitle: { fontSize: 14, color: '#41484d' },
 
-    // Card Form
     card: {
-        backgroundColor: '#ffffff',
-        borderRadius: 8,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(193, 199, 205, 0.3)',
-        shadowColor: '#5d8aa8',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
+        backgroundColor: '#ffffff', borderRadius: 8, padding: 16,
+        borderWidth: 1, borderColor: 'rgba(193, 199, 205, 0.3)',
+        shadowColor: '#5d8aa8', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1,
     },
     inputGroup: {},
     inputLabel: { fontSize: 12, fontWeight: '500', color: '#0b1c30', marginBottom: 8 },
     selectBox: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#f8f9ff',
-        borderWidth: 1,
-        borderColor: '#c1c7cd',
-        borderRadius: 8,
-        height: 48,
-        paddingHorizontal: 12,
-        shadowColor: '#5d8aa8',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        backgroundColor: '#f8f9ff', borderWidth: 1, borderColor: '#c1c7cd', borderRadius: 8,
+        height: 48, paddingHorizontal: 12,
+        shadowColor: '#5d8aa8', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1,
     },
     selectText: { fontSize: 14, color: '#0b1c30' },
 
-    // Family Section
     familySection: { marginTop: 16 },
     familyHeaderTitle: { fontSize: 12, fontWeight: '500', color: '#0b1c30', letterSpacing: 0.5 },
     familySubTitle: { fontSize: 14, color: '#41484d', marginTop: 4 },
     familyCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#f8f9ff',
-        borderWidth: 1,
-        borderColor: '#c1c7cd',
-        borderRadius: 8,
-        padding: 12,
-        marginTop: 8,
-        shadowColor: '#5d8aa8',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
+        flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8f9ff',
+        borderWidth: 1, borderColor: '#c1c7cd', borderRadius: 8, padding: 12, marginTop: 8,
+        shadowColor: '#5d8aa8', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1,
     },
-    familyAvatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#4c7a97',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 16,
-    },
+    familyAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#4c7a97', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
     familyInitials: { fontSize: 14, fontWeight: '600', color: '#fcfcff' },
     familyInfo: { flex: 1 },
     familyName: { fontSize: 14, fontWeight: '600', color: '#0b1c30' },
     familyRelation: { fontSize: 12, color: '#41484d', marginTop: 2 },
 
-    // Source Grid
     sourceGrid: { flexDirection: 'row', gap: 8, marginTop: 16 },
     sourceCard: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 16,
-        borderRadius: 8,
-        backgroundColor: '#ffffff',
-        borderWidth: 1,
-        borderColor: 'rgba(193, 199, 205, 0.5)',
+        flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 16,
+        borderRadius: 8, backgroundColor: '#ffffff', borderWidth: 1, borderColor: 'rgba(193, 199, 205, 0.5)',
     },
     sourceCardActive: {
-        backgroundColor: '#e5eeff',
-        borderColor: 'rgba(50, 97, 125, 0.5)',
-        shadowColor: '#5d8aa8',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        elevation: 2,
+        backgroundColor: '#e5eeff', borderColor: 'rgba(50, 97, 125, 0.5)',
+        shadowColor: '#5d8aa8', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 2,
     },
     sourceText: { fontSize: 12, color: '#41484d', marginTop: 8, fontWeight: '500' },
     sourceTextActive: { color: '#32617d', fontWeight: '700' },
 
-    // Save Button
     saveBtn: {
-        backgroundColor: '#32617d',
-        height: 48,
-        borderRadius: 9999,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 24,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 4,
+        backgroundColor: '#32617d', height: 48, borderRadius: 9999, alignItems: 'center', justifyContent: 'center', marginTop: 24,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 4,
     },
     saveBtnText: { fontSize: 20, fontWeight: '600', color: '#ffffff' },
 
-    // Staged list
     stagedList: { gap: 8, marginTop: 16, marginBottom: -8 },
     stagedItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8f9ff', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: 'rgba(193, 199, 205, 0.3)' },
     stagedIcon: { width: 44, height: 44, borderRadius: 8, backgroundColor: '#e5eeff', alignItems: 'center', justifyContent: 'center', marginRight: 12, overflow: 'hidden' },
@@ -886,23 +757,13 @@ const s = StyleSheet.create({
     stagedTs: { fontSize: 11, color: '#41484d' },
     removeBtn: { padding: 4, borderRadius: 20 },
 
-    // Recent Uploads
     recentSection: { flex: 1, marginTop: 8 },
     sectionTitle: { fontSize: 20, fontWeight: '600', color: '#0b1c30', marginBottom: 12 },
     recentList: { gap: 8 },
     recentItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#ffffff',
-        borderRadius: 8,
-        padding: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(193, 199, 205, 0.3)',
-        shadowColor: '#5d8aa8',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 1,
+        flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff',
+        borderRadius: 8, padding: 12, borderWidth: 1, borderColor: 'rgba(193, 199, 205, 0.3)',
+        shadowColor: '#5d8aa8', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 1,
     },
     recentLeft: { flex: 1, flexDirection: 'row', alignItems: 'center' },
     recentIcon: { width: 48, height: 48, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
@@ -915,7 +776,6 @@ const s = StyleSheet.create({
     recentTag: { fontSize: 10, fontWeight: '500', color: '#41484d' },
     actionBtn: { padding: 8 },
 
-    // Overlay Menus
     overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', zIndex: 1000, elevation: 1000 },
     sheet: { backgroundColor: '#ffffff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '60%' },
     sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
@@ -925,7 +785,12 @@ const s = StyleSheet.create({
     sheetActionItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#f8f9ff', gap: 12 },
     sheetActionText: { fontSize: 16, fontWeight: '500', color: '#0b1c30' },
 
-    // Viewer Modal
+    loadingOverlay: {
+        ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.85)',
+        alignItems: 'center', justifyContent: 'center', zIndex: 999, elevation: 999,
+    },
+    loadingText: { marginTop: 12, fontSize: 14, color: '#32617d', fontWeight: '500' },
+
     viewerSafe: { flex: 1, backgroundColor: '#f8f9ff' },
     viewerHeader: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -937,5 +802,6 @@ const s = StyleSheet.create({
     viewerTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#0b1c30', textAlign: 'center', marginHorizontal: 8 },
     viewerLoader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     imageViewerContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-    fullImage: { width: '100%', height: '100%' }
+    fullImage: { width: '100%', height: '100%' },
+    pdfViewer: { flex: 1, width: '100%', backgroundColor: '#f8f9ff' },
 });

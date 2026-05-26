@@ -1,79 +1,88 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Screens
 import DashboardScreen from '../screens/DashboardScreen';
 import ProfilesScreen from '../screens/ProfilesScreen';
 import RecordsScreen from '../screens/RecordsScreen';
 import TimelineScreen from '../screens/TimelineScreen';
-import UploadScreen from '../screens/UploadScreen'; 
-
-// Temporary Dummy Screen
-const DummyScreen = () => <View style={{ flex: 1, backgroundColor: '#F8F9FF' }} />;
+import UploadScreen from '../screens/UploadScreen';
 
 const Tab = createBottomTabNavigator();
 
-// Accessibility Font Scaling Lock
+// Accessibility Font Scaling & Overflow Lock
 const FixedText = (props: any) => (
-    <Text allowFontScaling={false} maxFontSizeMultiplier={1} {...props} />
+    <Text
+        allowFontScaling={false}
+        maxFontSizeMultiplier={1}
+        numberOfLines={1}
+        ellipsizeMode="tail"
+        {...props}
+    />
 );
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
+    // Dynamically handle bottom safe area for iPhones and Android gesture bars
+    const insets = useSafeAreaInsets();
+
     return (
-        <View style={styles.bottomNav}>
-            {state.routes.map((route: any, index: number) => {
-                const { options } = descriptors[route.key];
-                const isFocused = state.index === index;
+        <View style={[styles.bottomNavWrapper, { paddingBottom: insets.bottom }]}>
+            <View style={styles.bottomNav}>
+                {state.routes.map((route: any, index: number) => {
+                    const { options } = descriptors[route.key];
+                    const isFocused = state.index === index;
 
-                const onPress = () => {
-                    const event = navigation.emit({
-                        type: 'tabPress',
-                        target: route.key,
-                        canPreventDefault: true,
-                    });
+                    const onPress = () => {
+                        const event = navigation.emit({
+                            type: 'tabPress',
+                            target: route.key,
+                            canPreventDefault: true,
+                        });
 
-                    if (!isFocused && !event.defaultPrevented) {
-                        navigation.navigate(route.name);
+                        if (!isFocused && !event.defaultPrevented) {
+                            navigation.navigate(route.name);
+                        }
+                    };
+
+                    // Floating Action Button exactly in the middle
+                    if (route.name === 'Upload') {
+                        return (
+                            <View key={route.key} style={styles.fabContainer}>
+                                <TouchableOpacity
+                                    style={styles.fab}
+                                    activeOpacity={0.85}
+                                    onPress={onPress}
+                                >
+                                    <MaterialIcons name="add" size={32} color="#FFFFFF" />
+                                </TouchableOpacity>
+                            </View>
+                        );
                     }
-                };
 
-                // Floating Action Button exactly in the middle
-                if (route.name === 'Upload') {
+                    // Determine Icons based on route name
+                    let iconName: any = 'dashboard';
+                    if (route.name === 'Dashboard') iconName = 'dashboard';
+                    if (route.name === 'Records') iconName = 'folder';
+                    if (route.name === 'Timeline') iconName = 'schedule';
+                    if (route.name === 'Profile') iconName = 'person';
+
                     return (
-                        <View key={route.key} style={styles.fabContainer}>
-                            <TouchableOpacity
-                                style={styles.fab}
-                                activeOpacity={0.85}
-                                onPress={onPress} // Now behaves like a normal tab switch!
-                            >
-                                <MaterialIcons name="add" size={32} color="#FFFFFF" />
-                            </TouchableOpacity>
-                        </View>
+                        <TouchableOpacity key={route.key} style={styles.navItem} onPress={onPress}>
+                            <MaterialIcons
+                                name={iconName}
+                                size={24}
+                                color={isFocused ? "#32617D" : "#5C5F60"}
+                            />
+                            <FixedText style={isFocused ? styles.navTextActive : styles.navText}>
+                                {route.name}
+                            </FixedText>
+                        </TouchableOpacity>
                     );
-                }
-
-                // Determine Icons based on route name
-                let iconName: any = 'dashboard';
-                if (route.name === 'Dashboard') iconName = 'dashboard';
-                if (route.name === 'Records') iconName = 'description';
-                if (route.name === 'Timeline') iconName = 'schedule';
-                if (route.name === 'Profile') iconName = 'person';
-
-                return (
-                    <TouchableOpacity key={route.key} style={styles.navItem} onPress={onPress}>
-                        <MaterialIcons
-                            name={iconName}
-                            size={24}
-                            color={isFocused ? "#32617D" : "#5C5F60"}
-                        />
-                        <FixedText style={isFocused ? styles.navTextActive : styles.navText}>
-                            {route.name}
-                        </FixedText>
-                    </TouchableOpacity>
-                );
-            })}
+                })}
+            </View>
         </View>
     );
 }
@@ -86,10 +95,7 @@ export default function MainTabNavigator() {
         >
             <Tab.Screen name="Dashboard" component={DashboardScreen} />
             <Tab.Screen name="Records" component={RecordsScreen} />
-
-            {/* UPDATED: We put the actual Upload screen here instead of a Placeholder */}
             <Tab.Screen name="Upload" component={UploadScreen} />
-
             <Tab.Screen name="Timeline" component={TimelineScreen} />
             <Tab.Screen name="Profile" component={ProfilesScreen} />
         </Tab.Navigator>
@@ -97,21 +103,24 @@ export default function MainTabNavigator() {
 }
 
 const styles = StyleSheet.create({
-    bottomNav: {
-        flexDirection: 'row',
-        height: 72,
+    // Outer wrapper handles the shadows and the dynamic safe area padding
+    bottomNavWrapper: {
         backgroundColor: '#F8F9FF',
         borderTopWidth: 1,
         borderTopColor: '#C1C7CD',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        paddingHorizontal: 8,
-        paddingBottom: Platform.OS === 'ios' ? 16 : 0,
         elevation: 10,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -4 },
         shadowOpacity: 0.05,
         shadowRadius: 6,
+    },
+    // Inner nav remains exactly 72px high so the top: -45 calculates perfectly
+    bottomNav: {
+        flexDirection: 'row',
+        height: 72,
+        alignItems: 'center',
+        justifyContent: 'space-around',
+        paddingHorizontal: 8,
     },
     navItem: {
         flex: 1,
@@ -138,7 +147,7 @@ const styles = StyleSheet.create({
     },
     fab: {
         position: 'absolute',
-        top: -45,
+        top: -45, // This is now mathematically safe again
         width: 56,
         height: 56,
         borderRadius: 28,

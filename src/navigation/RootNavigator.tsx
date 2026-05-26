@@ -10,14 +10,14 @@ import SplashScreen from '../../screens/SplashScreen';
 import OnboardingOneScreen from '../../screens/OnboardingOneScreen';
 import OnboardingTwoScreen from '../../screens/OnboardingTwoScreen';
 import OnboardingThreeScreen from '../../screens/OnboardingThreeScreen';
-import VerifyAccountScreen from '../auth/auth/VerifyAccountScreen';
-import ProfileSetupScreen from '../auth/auth/ProfileSetupScreen';
+import VerifyAccountScreen from '../auth/VerifyAccountScreen';
+import ProfileSetupScreen from '../auth/ProfileSetupScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import SettingsProfileScreen from '../screens/SettingsProfileScreen';
 import MainTabNavigator from './MainTabNavigator';
 
 // Auth & Additional Screens
-import LoginScreen from '../auth/auth/LoginScreen';
+import LoginScreen from '../auth/LoginScreen';
 import UploadScreen from '../screens/UploadScreen';
 
 const Stack = createNativeStackNavigator();

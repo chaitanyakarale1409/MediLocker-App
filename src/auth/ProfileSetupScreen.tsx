@@ -16,7 +16,7 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../src/context/AuthContext';
 
 // NOTE: Import your actual API function and Zustand store here
 // import { createProfileApi } from '../services/api/profile.api';

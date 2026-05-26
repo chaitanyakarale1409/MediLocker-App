@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Custom Text component to enforce font scaling lock and prevent UI misalignment
@@ -28,57 +28,59 @@ export default function DashboardScreen() {
     const [loading, setLoading] = useState(true);
     const [showProfileSwitcher, setShowProfileSwitcher] = useState(false);
 
-    useEffect(() => {
-        const fetchProfiles = async () => {
-            try {
-                const token = await AsyncStorage.getItem('token');
-                if (!token) return;
+    useFocusEffect(
+        useCallback(() => {
+            const fetchProfiles = async () => {
+                try {
+                    const token = await AsyncStorage.getItem('token');
+                    if (!token) return;
 
-                const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/profiles`, {
-                    method: "GET",
-                    headers: {
-                        "Authorization": `Bearer ${token}`
-                    }
-                });
+                    const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/profiles`, {
+                        method: "GET",
+                        headers: {
+                            "Authorization": `Bearer ${token}`
+                        }
+                    });
 
-                if (response.ok) {
-                    const data = await response.json();
-                    setProfiles(data || []);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setProfiles(data || []);
 
-                    const savedProfile = await AsyncStorage.getItem("active_profile");
-                    let parsedSavedProfile: any = null;
+                        const savedProfile = await AsyncStorage.getItem("active_profile");
+                        let parsedSavedProfile: any = null;
 
-                    if (savedProfile) {
-                        try {
-                            parsedSavedProfile = JSON.parse(savedProfile);
-                        } catch {
-                            parsedSavedProfile = null;
+                        if (savedProfile) {
+                            try {
+                                parsedSavedProfile = JSON.parse(savedProfile);
+                            } catch {
+                                parsedSavedProfile = null;
+                            }
+                        }
+
+                        const matchedProfile = parsedSavedProfile
+                            ? data?.find((p: any) => p.id === parsedSavedProfile.id)
+                            : null;
+
+                        if (matchedProfile) {
+                            setActiveProfile(matchedProfile);
+                            await AsyncStorage.setItem("active_profile", JSON.stringify(matchedProfile));
+                        } else if (data?.length > 0) {
+                            setActiveProfile(data[0]);
+                            await AsyncStorage.setItem("active_profile", JSON.stringify(data[0]));
+                        } else {
+                            await AsyncStorage.removeItem("active_profile");
                         }
                     }
-
-                    const matchedProfile = parsedSavedProfile
-                        ? data?.find((p: any) => p.id === parsedSavedProfile.id)
-                        : null;
-
-                    if (matchedProfile) {
-                        setActiveProfile(matchedProfile);
-                        await AsyncStorage.setItem("active_profile", JSON.stringify(matchedProfile));
-                    } else if (data?.length > 0) {
-                        setActiveProfile(data[0]);
-                        await AsyncStorage.setItem("active_profile", JSON.stringify(data[0]));
-                    } else {
-                        await AsyncStorage.removeItem("active_profile");
-                    }
+                } catch (error) {
+                    console.error(error);
+                } finally {
+                    setLoading(false);
                 }
-            } catch (error) {
-                console.error(error);
-            } finally {
-                setLoading(false);
-            }
-        };
+            };
 
-        fetchProfiles();
-    }, []);
+            fetchProfiles();
+        }, [])
+    );
 
     const handleProfileSelect = async (profile: any) => {
         setActiveProfile(profile);
